@@ -169,7 +169,7 @@ async def ui_platform_tenants(
 async def ui_platform_scaling():
     import api.platform
     adm_key = _get_admin_key()
-    return await api.platform.platform_scaling(x_admin_key=adm_key)
+    return await api.platform.get_scaling_data(x_admin_key=adm_key)
 
 @router.get("/monitor")
 async def ui_admin_monitor():
