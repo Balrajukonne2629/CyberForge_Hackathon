@@ -1,4 +1,4 @@
--- Rollup database schema for analytics store
+-- Rollup database schema for analytics store (v1.1 per-tenant multi-source)
 
 CREATE TABLE IF NOT EXISTS rollup_orders_hour (
     tenant_id int NOT NULL,
@@ -25,29 +25,34 @@ CREATE TABLE IF NOT EXISTS rollup_product_day (
 CREATE INDEX IF NOT EXISTS idx_rollup_product_day_range 
     ON rollup_product_day (tenant_id, day);
 
+CREATE TABLE IF NOT EXISTS tenant_registry (
+    tenant_id int PRIMARY KEY,
+    database_name text NOT NULL,
+    api_key text NOT NULL,
+    created_at timestamp NOT NULL DEFAULT clock_timestamp()
+);
+
 CREATE TABLE IF NOT EXISTS worker_state (
-    id int PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    tenant_id int PRIMARY KEY,
     cursor_xid xid8 NOT NULL DEFAULT '0'::xid8,
     cursor_id bigint NOT NULL DEFAULT 0,
     snapshot pg_snapshot,
     last_batch_at timestamp,
     lag_seconds numeric(10,2) NOT NULL DEFAULT 0.0,
     heartbeat timestamp NOT NULL DEFAULT clock_timestamp(),
-    worker_stalled boolean NOT NULL DEFAULT false,
-    stalled_reason text,
+    stalled boolean NOT NULL DEFAULT false,
+    last_error text,
     has_pending boolean NOT NULL DEFAULT false,
     oldest_pending_ts timestamp
 );
 
--- Initialize default single-row state
-INSERT INTO worker_state (id, cursor_xid, cursor_id, heartbeat, worker_stalled)
-VALUES (1, '0'::xid8, 0, clock_timestamp(), false)
-ON CONFLICT (id) DO NOTHING;
-
 CREATE TABLE IF NOT EXISTS quarantine (
     id bigserial PRIMARY KEY,
+    tenant_id int,
     outbox_id bigint,
     payload jsonb NOT NULL,
     reason text NOT NULL,
     created_at timestamp NOT NULL DEFAULT clock_timestamp()
 );
+
+CREATE INDEX IF NOT EXISTS idx_quarantine_tenant ON quarantine (tenant_id);

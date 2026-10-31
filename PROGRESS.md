@@ -6,7 +6,8 @@
 |---|---|---|---|
 | **Phase 0** | Recon and Data Setup | **DONE** | Data loaded (1M & 10M), 100% PASS on integrity checks, SCHEMA_NOTES.md complete, config.yaml written, baseline benchmark measured & saved. |
 | **Phase 1** | Core Pipeline | **DONE** | Statement-level triggers with transition tables & fan-out, rollup tables with CHECK constraints, safe-xid worker, FastAPI endpoints, rebuild procedure, trigger overhead measured, golden parity 100% (90/90 match), worker_stalled demo passed. |
-| **Phase 2** | Trust & Measurement | **DONE** | 100% PASS on unified test suite (`tests/run_all.py`) across both 1M and 10M profiles (isolation, idempotency, out-of-order, mutations, quarantine, crash recovery, fail closed, rebuild equality under load, 480/480 golden parity checks); official benchmark harness (`bench/bench.py`) measured and saved to `docs/BENCHMARK.md`; fail-closed runbook in `docs/RUNBOOK.md`; single setup script in `scripts/setup_10m.py`. |
+| **Phase 2** | Trust & Measurement | **DONE** | 100% PASS on unified test suite (`tests/run_all.py`) across both 1M and 10M profiles; official benchmark harness (`bench/bench.py`) measured and saved to `docs/BENCHMARK.md`; fail-closed runbook in `docs/RUNBOOK.md`. |
+| **Phase 2.5** | Per-Tenant Database Architecture | **DONE** | Mandatory mentor requirement: 100 separate PostgreSQL databases (`tenant_001` .. `tenant_100`). Multi-source round-robin worker, per-tenant fail-closed, statement triggers inside each DB, 11/11 test suites passing (480/480 golden checks), docs/BENCHMARK.md side-by-side comparison. Git tag `phase2-single-db` preserved. |
 | **Phase 3** | Bonuses | NOT STARTED | B-1 fresh timestamp, B-2 rebuild from scratch, B-3 concurrency throttle (429), B-5 monitor page. |
 | **Phase 4** | Standout Features | NOT STARTED | One-command scoreboard, try-to-break-it chaos test, live proof page. |
 | **Phase 5** | Freeze & Delivery | NOT STARTED | Clean-clone validation, README, backup video, demo rehearsal. |
@@ -88,6 +89,46 @@ SUCCESS: All 9 test suites passed with 100% ground-truth parity!
 
 ---
 
+## Phase 2.5 Execution Details (Per-Tenant Database Architecture)
+
+### Mandatory Requirement & Frozen Decisions
+Per mentor mandate, the single shared `shop` database design was replaced by a strict per-tenant database layout:
+1. **100 Tenant Databases**: `tenant_001` through `tenant_100` hosted on `cyberforge-main-db` (Postgres 16 on port 5432). Max connections raised to 300.
+2. **Central Rollup DB**: Port 5433 (`rollup_1m`). Contains `tenant_registry`, per-tenant `worker_state` rows (`tenant_id PK`), and rollup tables starting with `tenant_id`.
+3. **Outbox & Triggers**: Reside inside each tenant DB (statement triggers cannot write across DB boundaries).
+4. **Per-Tenant Fail Closed**: If tenant *T* violates check constraints, ONLY tenant *T* stalls (`worker_stalled: true`), while the other 99 tenants continue ingesting seamlessly. Global `/health` reports cluster health and stalled tenant lists.
+5. **Multi-Source Worker**: Round-robin scheduler with persistent connections, safe-xid batches, capped per-tenant batch (`500`), and sharding support (`WORKER_ID`/`WORKER_COUNT`).
+6. **Per-Tenant Rebuild**: Granular REPEATABLE READ snapshot rebuild per tenant (`POST /admin/rebuild?tenant_id=...`) and parallel full rebuild (`scripts/rebuild.py --profile 1m`). Optimistic row-level locking on `worker_state FOR UPDATE` eliminates rebuild/worker race conditions.
+
+### Test Verification Evidence (`py -3.12 tests/run_all.py --profile 1m`)
+```
+======================================================================
+TEST SUITE SUMMARY (1M):
+  1. Tenant Isolation                          :     PASS (1.42s)
+  2. Idempotency per-tenant                    :     PASS (0.19s)
+  3. Out-of-Order Commit per-tenant            :     PASS (1.33s)
+  4. Single-Tenant Mutation & Fan-out          :     PASS (0.87s)
+  5. Concurrent Multi-Tenant Updates (25 DBs)  :     PASS (4.37s)
+  6. Fairness & Anti-Starvation                :     PASS (1.35s)
+  7. Quarantine Handling                       :     PASS (0.24s)
+  8. Crash Recovery per-tenant                 :     PASS (6.01s)
+  9. Per-Tenant Fail Closed & Stall Isolation  :     PASS (2.92s)
+  10. Rebuild Equality under Load per-tenant   :     PASS (8.06s)
+  11. Golden Ground-Truth Parity vs Tenant DBs :     PASS (9.55s)
+======================================================================
+SUCCESS: All 11 test suites passed with 100% ground-truth parity!
+GOLDEN CHECK RESULTS: 480/480 passed. Total mismatches: 0
+```
+
+### Official Benchmark Comparison (`docs/BENCHMARK.md`)
+- **Query Latency p95**: 5.54ms (count), 13.29ms (trend), 6.34ms (by-status), 9.23ms (top products). Flat vs Phase 2 baseline (all `<= 15ms`, PRD Great is `<= 20ms`).
+- **Freshness Lag**: p50 120.8ms, p95 208.0ms across 50 random tenant probes (PRD Great is `<= 500ms`).
+- **Worker Cycle Time**: 10 tenants = 35.4ms, 50 tenants = 119.0ms, 100 tenants = 216.1ms (~4.6 cluster passes/sec). Idle polling cost is < 2.5% CPU, confirming no NOTIFY machinery is needed.
+- **DB Safety**: Alternating 3-round OLTP write overhead: Triggers + Worker = 16.6% drop (PRD Good: <= 20%).
+- **Storage Ratio**: 10.12% of raw data (135.7 MB rollup vs 1,340 MB across 100 tenant DBs).
+
+---
+
 ## Next Step
-- Phase 2 is complete and verified on both profiles.
-- Stopped at Phase 2 Gate. Ready for user review and prompt to begin **Phase 3: Bonuses**.
+- Phase 2.5 is complete, verified, benchmarked, and committed.
+- Stopped at Phase 2.5 Gate. Ready for user review and explicit command to "start phase 3".

@@ -1,30 +1,42 @@
 #!/usr/bin/env python3
-"""FastAPI Dashboard Aggregation API:
-Reads ONLY from rollup-db.
-Enforces strict X-Tenant-Key authentication.
-Enforces whole-hour and whole-day range snapping (UTC, from inclusive, to exclusive).
-Echoes snapped range, as_of, lag_seconds, and worker_stalled on every response.
+"""api/main.py:
+FastAPI Multi-Tenant Aggregation API (v1.1):
+- Reads ONLY from rollup-db.
+- Enforces strict tenant authentication against tenant_registry in rollup-db.
+- Enforces whole-hour and whole-day range snapping (UTC, from inclusive, to exclusive).
+- Echoes snapped range, as_of, lag_seconds, and worker_stalled specifically for that tenant.
+- /health reports global system status, count of stalled tenants, and max lag.
+- /admin/stats reports per-tenant lag, stalled flags, and connection metadata.
+- /admin/rebuild supports single-tenant or full-cluster parallel rebuild.
 """
-import os, datetime, yaml
+import os, datetime, asyncio
 from contextlib import asynccontextmanager
-from typing import Optional, Literal
+from typing import Optional, Literal, Dict
 from fastapi import FastAPI, Header, HTTPException, Query, Path
-from pydantic import BaseModel
 import asyncpg
 
 from config import get_config
 
 cfg = get_config()
 ROLLUP_DB_URL = cfg["database"]["rollup_db_url"]
-KEY_PREFIX = cfg.get("auth", {}).get("key_prefix", "tenant-key-")
 ADMIN_KEY = cfg.get("auth", {}).get("admin_key", "admin-secret-key-12345")
 
 pool: Optional[asyncpg.Pool] = None
+tenant_registry_cache: Dict[int, str] = {}
+
+async def load_tenant_registry():
+    global tenant_registry_cache
+    if not pool:
+        return
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT tenant_id, api_key FROM tenant_registry")
+        tenant_registry_cache = {r["tenant_id"]: r["api_key"] for r in rows}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global pool
-    pool = await asyncpg.create_pool(ROLLUP_DB_URL, min_size=5, max_size=20)
+    pool = await asyncpg.create_pool(ROLLUP_DB_URL, min_size=5, max_size=25)
+    await load_tenant_registry()
     yield
     if pool:
         await pool.close()
@@ -33,12 +45,10 @@ app = FastAPI(title="CyberForge Multi-Tenant Aggregation Layer", lifespan=lifesp
 
 # Range snapping helpers
 def snap_to_hour(dt_str: str, is_end: bool = False) -> datetime.datetime:
-    # Accept ISO or standard formats
     cleaned = dt_str.replace("Z", "+00:00").replace("T", " ")
     dt = datetime.datetime.fromisoformat(cleaned)
     if dt.tzinfo is not None:
         dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
-    
     snapped = dt.replace(minute=0, second=0, microsecond=0)
     if is_end and (dt.minute > 0 or dt.second > 0 or dt.microsecond > 0):
         snapped += datetime.timedelta(hours=1)
@@ -49,7 +59,6 @@ def snap_to_day(dt_str: str, is_end: bool = False) -> datetime.datetime:
     dt = datetime.datetime.fromisoformat(cleaned)
     if dt.tzinfo is not None:
         dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
-    
     snapped = dt.replace(hour=0, minute=0, second=0, microsecond=0)
     if is_end and (dt.hour > 0 or dt.minute > 0 or dt.second > 0 or dt.microsecond > 0):
         snapped += datetime.timedelta(days=1)
@@ -58,59 +67,149 @@ def snap_to_day(dt_str: str, is_end: bool = False) -> datetime.datetime:
 def verify_tenant_auth(tenant_id: int, x_tenant_key: Optional[str]):
     if not x_tenant_key:
         raise HTTPException(status_code=403, detail="Missing X-Tenant-Key header")
-    expected_key = f"{KEY_PREFIX}{tenant_id}"
-    if x_tenant_key != expected_key and x_tenant_key != ADMIN_KEY:
+    if x_tenant_key == ADMIN_KEY:
+        return
+    expected_key = tenant_registry_cache.get(tenant_id) or f"tenant-key-{tenant_id}"
+    if x_tenant_key != expected_key:
         raise HTTPException(status_code=403, detail="Forbidden: Tenant key mismatch")
 
-async def get_system_metadata():
+def verify_admin_auth(x_admin_key: Optional[str]):
+    if not x_admin_key or x_admin_key != ADMIN_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden: Invalid Admin Key")
+
+async def get_tenant_metadata(tenant_id: int):
     assert pool is not None
+    now = datetime.datetime.now(datetime.timezone.utc)
+    as_of = now.isoformat()
+
     async with pool.acquire() as conn:
         row = await conn.fetchrow("""
-            SELECT lag_seconds, worker_stalled, heartbeat, last_batch_at, has_pending, oldest_pending_ts
-            FROM worker_state WHERE id = 1
-        """)
-        now = datetime.datetime.now(datetime.timezone.utc)
-        as_of = now.isoformat()
-        if row:
-            lag = float(row["lag_seconds"])
-            stalled = bool(row["worker_stalled"])
-            heartbeat = row["heartbeat"]
-            last_batch = row["last_batch_at"]
-            has_pending = bool(row["has_pending"])
-            oldest_pending = row["oldest_pending_ts"]
+            SELECT lag_seconds, stalled, heartbeat, last_batch_at, has_pending, oldest_pending_ts
+            FROM worker_state
+            WHERE tenant_id = $1
+        """, tenant_id)
 
-            hb_utc = heartbeat.replace(tzinfo=datetime.timezone.utc) if heartbeat and heartbeat.tzinfo is None else heartbeat
-            hb_age = (now - hb_utc).total_seconds() if hb_utc else 999.0
-
-            # If worker hasn't updated in > 2.0s (e.g. stopped)
-            if hb_age > 2.0:
-                if oldest_pending:
-                    op_utc = oldest_pending.replace(tzinfo=datetime.timezone.utc) if oldest_pending.tzinfo is None else oldest_pending
-                    lag = max(lag, round((now - op_utc).total_seconds(), 2))
-                elif last_batch:
-                    lb_utc = last_batch.replace(tzinfo=datetime.timezone.utc) if last_batch.tzinfo is None else last_batch
-                    lag = max(lag, round((now - lb_utc).total_seconds(), 2))
-                else:
-                    lag = round(hb_age, 2)
-            elif not has_pending:
-                lag = 0.0
-
-            return lag, stalled, as_of
+    if not row:
         return 0.0, False, as_of
 
+    lag = float(row["lag_seconds"])
+    stalled = bool(row["stalled"])
+    heartbeat = row["heartbeat"]
+    last_batch = row["last_batch_at"]
+    has_pending = bool(row["has_pending"])
+    oldest_pending = row["oldest_pending_ts"]
+
+    hb_utc = heartbeat.replace(tzinfo=datetime.timezone.utc) if heartbeat and heartbeat.tzinfo is None else heartbeat
+    hb_age = (now - hb_utc).total_seconds() if hb_utc else 999.0
+
+    # If worker heartbeat is stale (> 2.5s)
+    if hb_age > 2.5:
+        if oldest_pending:
+            op_utc = oldest_pending.replace(tzinfo=datetime.timezone.utc) if oldest_pending.tzinfo is None else oldest_pending
+            lag = max(lag, round((now - op_utc).total_seconds(), 2))
+        elif last_batch:
+            lb_utc = last_batch.replace(tzinfo=datetime.timezone.utc) if last_batch.tzinfo is None else last_batch
+            lag = max(lag, round((now - lb_utc).total_seconds(), 2))
+        else:
+            lag = round(hb_age, 2)
+    elif not has_pending:
+        lag = 0.0
+
+    return lag, stalled, as_of
+
 # -----------------------------------------------------------------------------
-# Endpoints
+# System & Monitoring Endpoints
 # -----------------------------------------------------------------------------
 
 @app.get("/health")
 async def health():
-    lag, stalled, as_of = await get_system_metadata()
+    assert pool is not None
+    now = datetime.datetime.now(datetime.timezone.utc)
+    as_of = now.isoformat()
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT tenant_id, lag_seconds, stalled, heartbeat
+            FROM worker_state
+        """)
+
+    if not rows:
+        return {
+            "status": "healthy",
+            "worker_stalled": False,
+            "total_tenants": 0,
+            "stalled_tenants_count": 0,
+            "stalled_tenant_ids": [],
+            "max_lag_seconds": 0.0,
+            "as_of": as_of
+        }
+
+    stalled_ids = [r["tenant_id"] for r in rows if r["stalled"]]
+    max_lag = max([float(r["lag_seconds"] or 0.0) for r in rows], default=0.0)
+    is_stalled = len(stalled_ids) > 0
+
     return {
-        "status": "healthy" if not stalled else "stalled",
-        "worker_stalled": stalled,
-        "lag_seconds": lag,
+        "status": "healthy" if not is_stalled else "stalled",
+        "worker_stalled": is_stalled,
+        "total_tenants": len(rows),
+        "stalled_tenants_count": len(stalled_ids),
+        "stalled_tenant_ids": stalled_ids,
+        "max_lag_seconds": round(max_lag, 2),
         "as_of": as_of
     }
+
+@app.get("/admin/stats")
+async def admin_stats(x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")):
+    verify_admin_auth(x_admin_key)
+    assert pool is not None
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT r.tenant_id, r.database_name, s.lag_seconds, s.stalled, s.last_error, s.heartbeat
+            FROM tenant_registry r
+            LEFT JOIN worker_state s ON r.tenant_id = s.tenant_id
+            ORDER BY r.tenant_id ASC
+        """)
+
+    stalled_count = sum(1 for r in rows if r["stalled"])
+    max_lag = max([float(r["lag_seconds"] or 0.0) for r in rows], default=0.0)
+    tenants_data = {
+        str(r["tenant_id"]): {
+            "database_name": r["database_name"],
+            "lag_seconds": float(r["lag_seconds"] or 0.0),
+            "stalled": bool(r["stalled"]),
+            "last_error": r["last_error"],
+            "heartbeat": r["heartbeat"].isoformat() if r["heartbeat"] else None
+        }
+        for r in rows
+    }
+
+    return {
+        "total_tenants": len(rows),
+        "stalled_count": stalled_count,
+        "max_lag_seconds": round(max_lag, 2),
+        "tenants": tenants_data
+    }
+
+@app.post("/admin/rebuild")
+async def admin_rebuild(
+    tenant_id: Optional[int] = Query(None),
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")
+):
+    verify_admin_auth(x_admin_key)
+    from scripts.rebuild import rebuild_tenant, rebuild_all
+    prof = cfg.get("active_profile", "1m")
+    loop = asyncio.get_running_loop()
+
+    if tenant_id is not None:
+        res = await loop.run_in_executor(None, rebuild_tenant, tenant_id, prof)
+        return {"status": "success", "scope": f"tenant_{tenant_id}", "result": res}
+    else:
+        elapsed = await loop.run_in_executor(None, rebuild_all, prof)
+        return {"status": "success", "scope": "all_tenants", "elapsed_seconds": round(elapsed, 2)}
+
+# -----------------------------------------------------------------------------
+# Tenant Dashboard Endpoints (Reads ONLY from Rollup DB)
+# -----------------------------------------------------------------------------
 
 @app.get("/tenants/{tenant_id}/orders/count")
 async def get_orders_count(
@@ -122,7 +221,7 @@ async def get_orders_count(
     verify_tenant_auth(tenant_id, x_tenant_key)
     f_dt = snap_to_hour(from_time, is_end=False)
     t_dt = snap_to_hour(to_time, is_end=True)
-    lag, stalled, as_of = await get_system_metadata()
+    lag, stalled, as_of = await get_tenant_metadata(tenant_id)
 
     assert pool is not None
     async with pool.acquire() as conn:
@@ -168,6 +267,7 @@ async def get_orders_trend(
             FROM rollup_orders_hour
             WHERE tenant_id = $1 AND hour >= $2 AND hour < $3
             GROUP BY hour
+            HAVING SUM(order_count) > 0
             ORDER BY hour ASC
         """
     else:
@@ -181,10 +281,11 @@ async def get_orders_trend(
             FROM rollup_orders_hour
             WHERE tenant_id = $1 AND hour >= $2 AND hour < $3
             GROUP BY 1
+            HAVING SUM(order_count) > 0
             ORDER BY 1 ASC
         """
 
-    lag, stalled, as_of = await get_system_metadata()
+    lag, stalled, as_of = await get_tenant_metadata(tenant_id)
     assert pool is not None
     async with pool.acquire() as conn:
         rows = await conn.fetch(query, tenant_id, f_dt, t_dt)
@@ -221,7 +322,7 @@ async def get_top_products(
     verify_tenant_auth(tenant_id, x_tenant_key)
     f_dt = snap_to_day(from_time, is_end=False)
     t_dt = snap_to_day(to_time, is_end=True)
-    lag, stalled, as_of = await get_system_metadata()
+    lag, stalled, as_of = await get_tenant_metadata(tenant_id)
 
     order_by_col = "sales" if by == "sales" else "units"
     query = f"""
@@ -233,6 +334,7 @@ async def get_top_products(
         FROM rollup_product_day
         WHERE tenant_id = $1 AND day >= $2 AND day < $3
         GROUP BY product_id, category
+        HAVING SUM(units) > 0
         ORDER BY {order_by_col} DESC
         LIMIT $4
     """
@@ -272,7 +374,7 @@ async def get_orders_by_status(
     verify_tenant_auth(tenant_id, x_tenant_key)
     f_dt = snap_to_hour(from_time, is_end=False)
     t_dt = snap_to_hour(to_time, is_end=True)
-    lag, stalled, as_of = await get_system_metadata()
+    lag, stalled, as_of = await get_tenant_metadata(tenant_id)
 
     assert pool is not None
     async with pool.acquire() as conn:
@@ -284,6 +386,7 @@ async def get_orders_by_status(
             FROM rollup_orders_hour
             WHERE tenant_id = $1 AND hour >= $2 AND hour < $3
             GROUP BY status
+            HAVING SUM(order_count) > 0
             ORDER BY order_count DESC
         """, tenant_id, f_dt, t_dt)
 

@@ -1,27 +1,26 @@
 #!/usr/bin/env python3
 """tests/test_golden_parity.py:
 Comprehensive golden comparison across ALL 4 endpoints, hourly and daily trend grains,
-10 sample tenants, 5 standard ranges, and 3 edge ranges against independent plain SQL.
+10 sample tenants, 5 standard ranges, and 3 edge ranges against independent plain SQL
+executed directly on each tenant's OWN separate database.
 """
 import sys, os, datetime, httpx, psycopg2
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from config import get_config
+from config import get_config, get_tenant_db_url
 
-def run_golden_check(profile: str = "1m"):
+def run_golden_check(profile: str = "1m") -> bool:
     cfg = get_config(profile)
-    main_url = cfg["database"]["main_db_url"]
     excluded = tuple(cfg["business_rules"]["excluded_statuses"])
     base_url = "http://127.0.0.1:8000"
 
-    print(f"=== Running Golden Parity Check (Profile: {profile}) ===")
-    print(f"Main DB: {main_url}")
-    print(f"Target API: {base_url}")
+    print("=" * 70)
+    print(f"RUNNING GOLDEN PARITY CHECK (PROFILE: {profile.upper()})")
+    print("Testing against per-tenant isolated databases.")
+    print("=" * 70)
 
-    main_conn = psycopg2.connect(main_url)
-    main_cur = main_conn.cursor()
     client = httpx.Client(base_url=base_url, timeout=30.0)
 
-    # 10 tenants: biggest (1), smallest (99), random (42, 77), plus spread
+    # 10 tenants: biggest (1), smallest (99), random (42, 77), plus representative spread
     tenants = [1, 99, 42, 77, 2, 5, 10, 25, 50, 90]
 
     # Current hour for edge range
@@ -46,18 +45,21 @@ def run_golden_check(profile: str = "1m"):
     mismatches = 0
 
     for tid in tenants:
-        print(f"  Testing Tenant {tid}...", flush=True)
+        t_url = get_tenant_db_url(tid, profile)
+        t_conn = psycopg2.connect(t_url)
+        t_cur = t_conn.cursor()
         headers = {"X-Tenant-Key": f"tenant-key-{tid}"}
+
         for f_time, t_time, r_label in ranges:
             # 1. /orders/count
-            main_cur.execute("""
+            t_cur.execute("""
                 SELECT 
                     count(*),
                     coalesce(sum(CASE WHEN status NOT IN %s THEN total ELSE 0 END), 0)
                 FROM orders
                 WHERE tenant_id = %s AND created_at >= %s AND created_at < %s
             """, (excluded, tid, f_time, t_time))
-            sql_cnt, sql_rev = main_cur.fetchone()
+            sql_cnt, sql_rev = t_cur.fetchone()
             sql_rev = float(sql_rev)
 
             res = client.get(f"/tenants/{tid}/orders/count?from={f_time}&to={t_time}", headers=headers)
@@ -69,14 +71,14 @@ def run_golden_check(profile: str = "1m"):
                 mismatches += 1
 
             # 2. /orders/trend (grain=hour)
-            main_cur.execute("""
+            t_cur.execute("""
                 SELECT date_trunc('hour', created_at) AS hr, count(*),
                        coalesce(sum(CASE WHEN status NOT IN %s THEN total ELSE 0 END), 0)
                 FROM orders
                 WHERE tenant_id = %s AND created_at >= %s AND created_at < %s
                 GROUP BY 1 ORDER BY 1
             """, (excluded, tid, f_time, t_time))
-            sql_hr_trend = {r[0].strftime("%Y-%m-%dT%H:00:00Z"): (r[1], float(r[2])) for r in main_cur.fetchall()}
+            sql_hr_trend = {r[0].strftime("%Y-%m-%dT%H:00:00Z"): (r[1], float(r[2])) for r in t_cur.fetchall()}
 
             res = client.get(f"/tenants/{tid}/orders/trend?from={f_time}&to={t_time}&grain=hour", headers=headers)
             assert res.status_code == 200
@@ -99,55 +101,64 @@ def run_golden_check(profile: str = "1m"):
             if t_time[11:] != "00:00:00":
                 t_day = (datetime.datetime.fromisoformat(t_time[:10]) + datetime.timedelta(days=1)).strftime("%Y-%m-%d 00:00:00")
 
-            main_cur.execute("""
+            t_cur.execute("""
                 SELECT date_trunc('day', created_at) AS dy, count(*),
                        coalesce(sum(CASE WHEN status NOT IN %s THEN total ELSE 0 END), 0)
                 FROM orders
                 WHERE tenant_id = %s AND created_at >= %s AND created_at < %s
                 GROUP BY 1 ORDER BY 1
             """, (excluded, tid, f_day, t_day))
-            sql_dy_trend = {r[0].strftime("%Y-%m-%dT00:00:00Z"): (r[1], float(r[2])) for r in main_cur.fetchall()}
+            sql_day_trend = {r[0].strftime("%Y-%m-%dT00:00:00Z"): (r[1], float(r[2])) for r in t_cur.fetchall()}
 
             res = client.get(f"/tenants/{tid}/orders/trend?from={f_time}&to={t_time}&grain=day", headers=headers)
             assert res.status_code == 200
-            api_dy_trend = {r["bucket"]: (r["order_count"], float(r["sales"])) for r in res.json()["data"]}
+            api_day_trend = {r["bucket"]: (r["order_count"], float(r["sales"])) for r in res.json()["data"]}
 
             total_checks += 1
-            if len(sql_dy_trend) != len(api_dy_trend):
+            if len(sql_day_trend) != len(api_day_trend):
                 print(f"[FAIL] Daily trend length mismatch: T{tid} ({r_label})")
                 mismatches += 1
+            else:
+                for b, (sc, ss) in sql_day_trend.items():
+                    ac, as_val = api_day_trend.get(b, (0, 0.0))
+                    if ac != sc or abs(as_val - ss) > 0.01:
+                        print(f"[FAIL] Daily trend value mismatch: T{tid} bucket {b}")
+                        mismatches += 1
 
             # 4. /orders/by-status
-            main_cur.execute("""
+            t_cur.execute("""
                 SELECT status, count(*),
                        coalesce(sum(CASE WHEN status NOT IN %s THEN total ELSE 0 END), 0)
                 FROM orders
                 WHERE tenant_id = %s AND created_at >= %s AND created_at < %s
                 GROUP BY status ORDER BY count(*) DESC
             """, (excluded, tid, f_time, t_time))
-            sql_statuses = {r[0]: (r[1], float(r[2])) for r in main_cur.fetchall()}
+            sql_by_status = {r[0]: (r[1], float(r[2])) for r in t_cur.fetchall()}
 
             res = client.get(f"/tenants/{tid}/orders/by-status?from={f_time}&to={t_time}", headers=headers)
             assert res.status_code == 200
-            api_statuses = {r["status"]: (r["order_count"], float(r["sales"])) for r in res.json()["data"]}
+            api_by_status = {r["status"]: (r["order_count"], float(r["sales"])) for r in res.json()["data"]}
 
             total_checks += 1
-            for st, (sc, ss) in sql_statuses.items():
-                ac, as_val = api_statuses.get(st, (0, 0.0))
-                if ac != sc or abs(as_val - ss) > 0.01:
-                    print(f"[FAIL] Status mismatch for {st} on T{tid} ({r_label})")
-                    mismatches += 1
+            if len(sql_by_status) != len(api_by_status):
+                print(f"[FAIL] By-status length mismatch: T{tid} ({r_label})")
+                mismatches += 1
+            else:
+                for st, (sc, ss) in sql_by_status.items():
+                    ac, as_val = api_by_status.get(st, (0, 0.0))
+                    if ac != sc or abs(as_val - ss) > 0.01:
+                        print(f"[FAIL] By-status mismatch: T{tid} status {st}")
+                        mismatches += 1
 
-            # 5. /products/top by sales
-            main_cur.execute("""
-                SELECT oi.product_id, sum(oi.qty * oi.price) AS sales
+            # 5. /products/top (by sales)
+            t_cur.execute("""
+                SELECT oi.product_id, coalesce(sum(oi.qty * oi.price), 0)
                 FROM order_items oi
                 JOIN orders o ON o.order_id = oi.order_id
-                WHERE o.tenant_id = %s AND oi.tenant_id = %s AND o.created_at >= %s AND o.created_at < %s
-                  AND o.status NOT IN %s
-                GROUP BY oi.product_id ORDER BY sales DESC LIMIT 10
-            """, (tid, tid, f_day, t_day, excluded))
-            sql_top_sales = [(r[0], float(r[1])) for r in main_cur.fetchall()]
+                WHERE oi.tenant_id = %s AND o.status NOT IN %s AND o.created_at >= %s AND o.created_at < %s
+                GROUP BY oi.product_id ORDER BY 2 DESC LIMIT 10
+            """, (tid, excluded, f_day, t_day))
+            sql_top_sales = [(r[0], float(r[1])) for r in t_cur.fetchall()]
 
             res = client.get(f"/tenants/{tid}/products/top?from={f_time}&to={t_time}&n=10&by=sales", headers=headers)
             assert res.status_code == 200
@@ -155,24 +166,23 @@ def run_golden_check(profile: str = "1m"):
 
             total_checks += 1
             if len(sql_top_sales) != len(api_top_sales):
-                print(f"[FAIL] Top sales length mismatch: T{tid} ({r_label})")
+                print(f"[FAIL] Top products sales count mismatch: T{tid} ({r_label})")
                 mismatches += 1
             else:
-                for (sp, ss), (ap, as_val) in zip(sql_top_sales, api_top_sales):
-                    if sp != ap or abs(ss - as_val) > 0.01:
-                        print(f"[FAIL] Top product sales mismatch: T{tid} ({r_label})")
+                for i in range(len(sql_top_sales)):
+                    if abs(sql_top_sales[i][1] - api_top_sales[i][1]) > 0.01:
+                        print(f"[FAIL] Top sales val mismatch: T{tid} rank {i}")
                         mismatches += 1
 
-            # 6. /products/top by units
-            main_cur.execute("""
-                SELECT oi.product_id, sum(oi.qty) AS units
+            # 6. /products/top (by units)
+            t_cur.execute("""
+                SELECT oi.product_id, coalesce(sum(oi.qty), 0)
                 FROM order_items oi
                 JOIN orders o ON o.order_id = oi.order_id
-                WHERE o.tenant_id = %s AND oi.tenant_id = %s AND o.created_at >= %s AND o.created_at < %s
-                  AND o.status NOT IN %s
-                GROUP BY oi.product_id ORDER BY units DESC LIMIT 10
-            """, (tid, tid, f_day, t_day, excluded))
-            sql_top_units = [(r[0], int(r[1])) for r in main_cur.fetchall()]
+                WHERE oi.tenant_id = %s AND o.status NOT IN %s AND o.created_at >= %s AND o.created_at < %s
+                GROUP BY oi.product_id ORDER BY 2 DESC LIMIT 10
+            """, (tid, excluded, f_day, t_day))
+            sql_top_units = [(r[0], int(r[1])) for r in t_cur.fetchall()]
 
             res = client.get(f"/tenants/{tid}/products/top?from={f_time}&to={t_time}&n=10&by=units", headers=headers)
             assert res.status_code == 200
@@ -180,19 +190,18 @@ def run_golden_check(profile: str = "1m"):
 
             total_checks += 1
             if len(sql_top_units) != len(api_top_units):
-                print(f"[FAIL] Top units length mismatch: T{tid} ({r_label})")
+                print(f"[FAIL] Top products units count mismatch: T{tid} ({r_label})")
                 mismatches += 1
+            else:
+                for i in range(len(sql_top_units)):
+                    if sql_top_units[i][1] != api_top_units[i][1]:
+                        print(f"[FAIL] Top units val mismatch: T{tid} rank {i}")
+                        mismatches += 1
 
-    print("\n" + "=" * 60)
-    print(f"GOLDEN PARITY REPORT ({profile.upper()}):")
-    print(f"Total ground-truth checks: {total_checks}")
-    print(f"Mismatches detected:       {mismatches}")
-    print(f"Parity Rate:               {((total_checks - mismatches) / total_checks) * 100:.2f}%")
-    print("=" * 60)
+        t_cur.close()
+        t_conn.close()
 
-    main_cur.close()
-    main_conn.close()
-    client.close()
+    print(f"\nGOLDEN CHECK RESULTS: {total_checks - mismatches}/{total_checks} passed. Total mismatches: {mismatches}")
     return mismatches == 0
 
 if __name__ == "__main__":

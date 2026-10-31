@@ -1,119 +1,155 @@
 #!/usr/bin/env python3
 """tests/test_crash_recovery.py:
-Tests worker crash mid-batch and recovery:
+Tests worker crash mid-batch and recovery per-tenant:
+Verifies across at least 3 tenants (including largest Tenant 1, plus 42 and 99):
 1. Spawns worker.
-2. Injects a stream of writes.
+2. Injects rapid mutations into all 3 tenant databases.
 3. Abruptly terminates (kills) the worker process while processing.
-4. Restarts the worker.
-5. Verifies all rollups catch up and match plain SQL ground truth with 0 errors.
+4. Injects additional mutations while worker is dead.
+5. Restarts the worker.
+6. Verifies all 3 tenants catch up to match plain SQL ground truth with 0 mismatches.
 """
 import sys, os, subprocess, time, psycopg2
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from config import get_config
+from config import get_config, get_tenant_db_url
+from tests.sync import wait_for_worker
 
-def run_crash_recovery_test(profile: str = "1m"):
-    print(f"=== Running Crash Recovery Test ({profile.upper()}) ===")
+def run_crash_recovery_test(profile: str = "1m") -> bool:
+    print(f"=== Running Per-Tenant Crash Recovery Test ({profile.upper()}) ===")
     cfg = get_config(profile)
-    main_url = cfg["database"]["main_db_url"]
     rollup_url = cfg["database"]["rollup_db_url"]
-    excluded = tuple(cfg["business_rules"]["excluded_statuses"])
+    test_tenants = [1, 42, 99]
 
     # 1. Start worker subprocess
-    print("1. Starting worker...")
-    p = subprocess.Popen(["py", "-3.12", "worker/worker.py", main_url, rollup_url])
-    time.sleep(1.0)
-
-    # 2. Inject rapid bulk mutations
-    print("2. Generating active bulk orders on main-db...")
-    main_conn = psycopg2.connect(main_url)
-    main_conn.autocommit = True
-    main_cur = main_conn.cursor()
+    print("1. Starting worker process...")
+    p = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile])
+    time.sleep(1.5)
 
     base_id = 999_888_000
-    # Pre-cleanup in case of aborted previous runs
-    main_cur.execute("DELETE FROM order_items WHERE order_id >= %s AND order_id < %s", (base_id, base_id + 200))
-    main_cur.execute("DELETE FROM orders WHERE order_id >= %s AND order_id < %s", (base_id, base_id + 200))
+    t_conns = {}
+    t_curs = {}
+    p2 = None
 
-    for i in range(50):
-        oid = base_id + i
-        main_cur.execute("""
-            INSERT INTO orders (order_id, tenant_id, customer_id, status, total, created_at, updated_at)
-            VALUES (%s, 1, 1, 'delivered', 50.00, '2026-10-28 15:00:00', now())
-        """, (oid,))
-        main_cur.execute("""
-            INSERT INTO order_items (item_id, order_id, tenant_id, product_id, qty, price)
-            VALUES (%s, %s, 1, 1, 1, 50.00)
-        """, (oid, oid))
+    try:
+        for tid in test_tenants:
+            url = get_tenant_db_url(tid, profile)
+            c = psycopg2.connect(url)
+            c.autocommit = True
+            cur = c.cursor()
+            t_conns[tid] = c
+            t_curs[tid] = cur
+            # Pre-cleanup full range
+            cur.execute("DELETE FROM order_items WHERE order_id >= %s AND order_id < %s", (base_id, base_id + 200_000))
+            cur.execute("DELETE FROM orders WHERE order_id >= %s AND order_id < %s", (base_id, base_id + 200_000))
 
-    # 3. Abruptly KILL the worker process mid-flight
-    print("3. Killing worker process abruptly (SIGKILL)...")
-    p.kill()
-    p.wait()
-    print("  Worker killed.")
+        # 2. Inject active bulk orders across all 3 tenants
+        print("2. Generating active bulk orders on all 3 tenant DBs...")
+        for tid in test_tenants:
+            cur = t_curs[tid]
+            cur.execute("SELECT product_id FROM products WHERE tenant_id = %s LIMIT 1", (tid,))
+            row = cur.fetchone()
+            pid = row[0] if row else 1
 
-    # Inject another 50 orders while worker is dead
-    print("4. Injecting further orders while worker is offline...")
-    for i in range(50, 100):
-        oid = base_id + i
-        main_cur.execute("""
-            INSERT INTO orders (order_id, tenant_id, customer_id, status, total, created_at, updated_at)
-            VALUES (%s, 1, 1, 'delivered', 50.00, '2026-10-28 15:00:00', now())
-        """, (oid,))
-        main_cur.execute("""
-            INSERT INTO order_items (item_id, order_id, tenant_id, product_id, qty, price)
-            VALUES (%s, %s, 1, 1, 1, 50.00)
-        """, (oid, oid))
+            for i in range(25):
+                oid = base_id + (tid * 1000) + i
+                cur.execute("""
+                    INSERT INTO orders (order_id, tenant_id, customer_id, status, total, created_at, updated_at)
+                    VALUES (%s, %s, 1, 'delivered', 50.00, '2026-10-28 15:00:00', now())
+                """, (oid, tid))
+                cur.execute("""
+                    INSERT INTO order_items (item_id, order_id, tenant_id, product_id, qty, price)
+                    VALUES (%s, %s, %s, %s, 1, 50.00)
+                """, (oid, oid, tid, pid))
 
-    # 5. Restart worker
-    print("5. Restarting worker to recover...")
-    p2 = subprocess.Popen(["py", "-3.12", "worker/worker.py", main_url, rollup_url])
-    
-    from tests.sync import wait_for_worker
-    wait_for_worker(main_url, rollup_url, timeout=15.0)
+        # 3. Abruptly KILL worker process mid-flight
+        print("3. Killing worker process abruptly (SIGKILL)...")
+        p.kill()
+        p.wait()
+        print("  Worker killed.")
 
-    # 6. Verify ground truth vs rollup
-    f_time = "2026-10-28 15:00:00"
-    t_time = "2026-10-28 16:00:00"
-    main_cur.execute("""
-        SELECT count(*), coalesce(sum(total), 0)
-        FROM orders
-        WHERE tenant_id = 1 AND created_at >= %s AND created_at < %s
-          AND status = 'delivered'
-    """, (f_time, t_time))
-    sql_cnt, sql_rev = main_cur.fetchone()
+        # 4. Inject further orders while worker is offline
+        print("4. Injecting further orders while worker is offline...")
+        for tid in test_tenants:
+            cur = t_curs[tid]
+            cur.execute("SELECT product_id FROM products WHERE tenant_id = %s LIMIT 1", (tid,))
+            row = cur.fetchone()
+            pid = row[0] if row else 1
 
-    rollup_conn = psycopg2.connect(rollup_url)
-    rollup_cur = rollup_conn.cursor()
-    rollup_cur.execute("""
-        SELECT order_count, revenue FROM rollup_orders_hour
-        WHERE tenant_id = 1 AND hour = %s AND status = 'delivered'
-    """, (f_time,))
-    r_cnt, r_rev = rollup_cur.fetchone()
+            for i in range(25, 50):
+                oid = base_id + (tid * 1000) + i
+                cur.execute("""
+                    INSERT INTO orders (order_id, tenant_id, customer_id, status, total, created_at, updated_at)
+                    VALUES (%s, %s, 1, 'delivered', 50.00, '2026-10-28 15:00:00', now())
+                """, (oid, tid))
+                cur.execute("""
+                    INSERT INTO order_items (item_id, order_id, tenant_id, product_id, qty, price)
+                    VALUES (%s, %s, %s, %s, 1, 50.00)
+                """, (oid, oid, tid, pid))
 
-    print(f"6. Verification after crash recovery:")
-    print(f"  Main SQL: count={sql_cnt}, rev={float(sql_rev)}")
-    print(f"  Rollup:   count={r_cnt}, rev={float(r_rev)}")
-    assert sql_cnt == r_cnt
-    assert abs(float(sql_rev) - float(r_rev)) < 0.01
+        # 5. Restart worker
+        print("5. Restarting worker to recover...")
+        p2 = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile])
 
-    # Cleanup
-    for i in range(100):
-        oid = base_id + i
-        main_cur.execute("DELETE FROM order_items WHERE order_id = %s", (oid,))
-        main_cur.execute("DELETE FROM orders WHERE order_id = %s", (oid,))
+        for tid in test_tenants:
+            wait_for_worker(profile, tenant_id=tid, timeout=15.0)
 
-    from tests.sync import wait_for_worker
-    wait_for_worker(main_url, rollup_url, timeout=15.0)
+        # 6. Verify ground truth vs rollup for all 3 tenants
+        r_conn = psycopg2.connect(rollup_url)
+        r_cur = r_conn.cursor()
+        f_time = "2026-10-28 15:00:00"
+        t_time = "2026-10-28 16:00:00"
 
-    p2.terminate()
-    p2.wait()
+        print("6. Verifying ground-truth match for all 3 tenants:")
+        for tid in test_tenants:
+            cur = t_curs[tid]
+            cur.execute("""
+                SELECT count(*), coalesce(sum(total), 0)
+                FROM orders
+                WHERE tenant_id = %s AND created_at >= %s AND created_at < %s
+                  AND status = 'delivered'
+            """, (tid, f_time, t_time))
+            sql_cnt, sql_rev = cur.fetchone()
 
-    main_cur.close()
-    main_conn.close()
-    rollup_cur.close()
-    rollup_conn.close()
+            r_cur.execute("""
+                SELECT order_count, revenue FROM rollup_orders_hour
+                WHERE tenant_id = %s AND hour = %s AND status = 'delivered'
+            """, (tid, f_time))
+            r_cnt, r_rev = r_cur.fetchone()
 
-    print(">>> CRASH RECOVERY TEST PASSED 100% <<<")
+            print(f"  Tenant {tid:2d}: SQL=({sql_cnt}, ${float(sql_rev):.2f}) vs Rollup=({r_cnt}, ${float(r_rev):.2f})")
+            assert sql_cnt == r_cnt, f"Tenant {tid} count mismatch: {sql_cnt} != {r_cnt}"
+            assert abs(float(sql_rev) - float(r_rev)) < 0.01, f"Tenant {tid} rev mismatch: {sql_rev} != {r_rev}"
+
+        r_cur.close()
+        r_conn.close()
+
+    finally:
+        # Guaranteed cleanup
+        for tid, cur in t_curs.items():
+            try:
+                cur.execute("DELETE FROM order_items WHERE order_id >= %s AND order_id < %s", (base_id, base_id + 200_000))
+                cur.execute("DELETE FROM orders WHERE order_id >= %s AND order_id < %s", (base_id, base_id + 200_000))
+            except Exception:
+                pass
+
+        if p2 and p2.poll() is None:
+            for tid in test_tenants:
+                try: wait_for_worker(profile, tenant_id=tid, timeout=10.0)
+                except Exception: pass
+            p2.terminate()
+            p2.wait()
+        elif p and p.poll() is None:
+            p.terminate()
+            p.wait()
+
+        for cur in t_curs.values():
+            try: cur.close()
+            except Exception: pass
+        for c in t_conns.values():
+            try: c.close()
+            except Exception: pass
+
+    print("\n>>> PER-TENANT CRASH RECOVERY TEST PASSED 100% <<<")
     return True
 
 if __name__ == "__main__":

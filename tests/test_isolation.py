@@ -3,16 +3,16 @@
 Tests strict multi-tenant isolation:
 1. Tenant A key on Tenant B path -> 403 Forbidden
 2. Missing key -> 403 Forbidden
-3. Cross-tenant sum: sum of all 100 tenant rollup counts equals global SQL total
+3. Sum over all 100 tenant databases equals the sum of rollups in rollup-db.
 """
 import sys, os, httpx, psycopg2
+from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from config import get_config
+from config import get_config, get_tenant_db_url, get_all_tenant_ids
 
 def run_isolation_tests(profile: str = "1m"):
     print(f"=== Running Tenant Isolation Tests ({profile.upper()}) ===")
     cfg = get_config(profile)
-    main_url = cfg["database"]["main_db_url"]
     rollup_url = cfg["database"]["rollup_db_url"]
     api_url = "http://127.0.0.1:8000"
     client = httpx.Client(base_url=api_url)
@@ -37,15 +37,25 @@ def run_isolation_tests(profile: str = "1m"):
     print(f"4. Valid key: {r.status_code}")
     assert r.status_code == 200, f"Expected 200, got {r.status_code}"
 
-    # 5. Global partition sum check
+    # 5. Global sum check: sum across all per-tenant databases vs rollup-db
     f_time = "2026-10-01 00:00:00"
     t_time = "2026-10-15 00:00:00"
-    print(f"\n5. Verifying cross-tenant partition sum for range [{f_time} to {t_time})...")
+    print(f"\n5. Verifying sum of per-tenant DBs vs rollup total for range [{f_time} to {t_time})...")
 
-    main_conn = psycopg2.connect(main_url)
-    main_cur = main_conn.cursor()
-    main_cur.execute("SELECT count(*) FROM orders WHERE created_at >= %s AND created_at < %s", (f_time, t_time))
-    global_sql_count = main_cur.fetchone()[0]
+    all_tids = get_all_tenant_ids(100)
+    def query_tenant_count(tid: int) -> int:
+        url = get_tenant_db_url(tid, profile)
+        c = psycopg2.connect(url)
+        cur = c.cursor()
+        cur.execute("SELECT count(*) FROM orders WHERE created_at >= %s AND created_at < %s", (f_time, t_time))
+        cnt = cur.fetchone()[0]
+        cur.close()
+        c.close()
+        return cnt
+
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        counts = list(ex.map(query_tenant_count, all_tids))
+    total_per_db_sql = sum(counts)
 
     rollup_conn = psycopg2.connect(rollup_url)
     rollup_cur = rollup_conn.cursor()
@@ -55,12 +65,10 @@ def run_isolation_tests(profile: str = "1m"):
     """, (f_time, t_time))
     rollup_total_count = rollup_cur.fetchone()[0]
 
-    print(f"  Global Main-DB count: {global_sql_count:,}")
-    print(f"  Sum of Tenant rollups: {rollup_total_count:,}")
-    assert global_sql_count == rollup_total_count, f"Mismatch: {global_sql_count} != {rollup_total_count}"
+    print(f"  Sum over 100 per-tenant DBs : {total_per_db_sql:,}")
+    print(f"  Sum of Tenant rollups       : {rollup_total_count:,}")
+    assert total_per_db_sql == rollup_total_count, f"Mismatch: {total_per_db_sql} != {rollup_total_count}"
 
-    main_cur.close()
-    main_conn.close()
     rollup_cur.close()
     rollup_conn.close()
     client.close()

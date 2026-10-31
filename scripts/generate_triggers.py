@@ -253,6 +253,7 @@ FOR EACH STATEMENT EXECUTE FUNCTION trg_order_items_delete_stmt();
     with open(out_file, "w", encoding="utf-8") as f:
         f.write(sql)
     print(f"Generated {out_file}")
+    return sql
 
 if __name__ == "__main__":
     generate_sql()
