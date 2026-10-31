@@ -247,7 +247,6 @@ async def admin_monitor(x_admin_key: Optional[str] = Header(None, alias="X-Admin
     profile = os.getenv("PROFILE", "1m")
     cfg = get_config(profile)
     w_cfg = cfg.get("worker", {})
-    worker_mode = os.getenv("WORKER_MODE", "event")
 
     pool = await _get_pool()
     async with pool.acquire() as conn:
@@ -269,6 +268,14 @@ async def admin_monitor(x_admin_key: Optional[str] = Header(None, alias="X-Admin
             ORDER BY r.tenant_id ASC
         """)
         quarantine_cnt = await conn.fetchval("SELECT count(*) FROM quarantine")
+        
+        # Real worker telemetry from worker_telemetry table
+        telemetry_row = await conn.fetchrow("""
+            SELECT mode, start_time, last_sweep, last_loop_ms, updated_at
+            FROM worker_telemetry
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """)
 
     tenants_list = [
         {
@@ -289,17 +296,33 @@ async def admin_monitor(x_admin_key: Optional[str] = Header(None, alias="X-Admin
     median_lag = sorted_lags[len(sorted_lags) // 2] if sorted_lags else 0.0
     worst_tenant = max(tenants_list, key=lambda t: t["lag_seconds"], default={"tenant_id": 1})
 
-    loop_time = round(float(w_cfg.get("debounce_ms", 15)) * 1.5, 2)
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    now_naive = now_utc.replace(tzinfo=None)
+
+    worker_mode = "unknown"
+    uptime_sec = None
+    sweep_age_sec = None
+    loop_time = None
+
+    if telemetry_row:
+        worker_mode = telemetry_row["mode"] or "unknown"
+        if telemetry_row["start_time"]:
+            uptime_sec = round((now_naive - telemetry_row["start_time"]).total_seconds(), 1)
+        if telemetry_row["last_sweep"]:
+            sweep_age_sec = round((now_naive - telemetry_row["last_sweep"]).total_seconds(), 1)
+        if telemetry_row["last_loop_ms"] is not None:
+            loop_time = round(float(telemetry_row["last_loop_ms"]), 2)
+
     changes_waiting = sum(1 for lag in all_lags if lag > 0.0)
 
     return {
         "worker_mode": worker_mode,
         "worker": {
             "mode": worker_mode,
-            "uptime_seconds": 3600.0,
-            "safety_sweep_age_seconds": 1.2,
+            "uptime_seconds": uptime_sec,
+            "safety_sweep_age_seconds": sweep_age_sec,
             "loop_time_ms": loop_time,
-            "events_per_sec": 42.0
+            "events_per_sec": None
         },
         "safety_sweep_interval": float(w_cfg.get("safety_sweep_interval", 5.0)),
         "debounce_ms": int(w_cfg.get("debounce_ms", 15)),
@@ -311,7 +334,7 @@ async def admin_monitor(x_admin_key: Optional[str] = Header(None, alias="X-Admin
         "changes_waiting": changes_waiting,
         "quarantine_count": int(quarantine_cnt or 0),
         "tenants": tenants_list,
-        "as_of": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        "as_of": now_utc.isoformat()
     }
 
 @router.get("/admin/platform/scaling")

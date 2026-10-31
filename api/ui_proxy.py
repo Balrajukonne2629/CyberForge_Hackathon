@@ -137,7 +137,11 @@ async def ui_get_orders_by_status(
 async def ui_stream_events(tenant_id: int = Path(...)):
     import api.main
     key = _get_tenant_key(tenant_id)
-    return await api.main.stream_events(tenant_id=tenant_id, x_tenant_key=key)
+    if hasattr(api.main, "stream_tenant_updates"):
+        return await api.main.stream_tenant_updates(tenant_id=tenant_id, x_tenant_key=key)
+    elif hasattr(api.main, "stream_events"):
+        return await api.main.stream_events(tenant_id=tenant_id, x_tenant_key=key)
+    raise HTTPException(status_code=501, detail="Stream endpoint not implemented on backend")
 
 # -----------------------------------------------------------------------------
 # Platform / Admin Endpoints
@@ -182,6 +186,14 @@ async def ui_admin_stats():
 # -----------------------------------------------------------------------------
 # Demo Endpoints
 # -----------------------------------------------------------------------------
+
+@router.get("/demo/status")
+async def ui_demo_status():
+    return {
+        "demo_mode": os.getenv("DEMO_MODE") == "1",
+        "worker_mode": os.getenv("WORKER_MODE", "event"),
+        "profile": os.getenv("PROFILE", "1m")
+    }
 
 @router.post("/demo/order")
 async def ui_demo_order(req: DemoOrderReq):

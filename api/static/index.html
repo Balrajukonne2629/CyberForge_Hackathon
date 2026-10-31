@@ -380,6 +380,45 @@
       color: var(--text);
     }
 
+    @keyframes deltaFlash {
+      0% { background-color: var(--ok); transform: scale(1.02); }
+      50% { background-color: var(--ok); transform: scale(1.02); }
+      100% { background-color: transparent; transform: scale(1); }
+    }
+    .tile-flash {
+      animation: deltaFlash 1.2s ease-out;
+    }
+    .tile-delta {
+      display: inline-block;
+      margin-left: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ok-border);
+    }
+    .header-live-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--ok);
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+    .header-live-dot.reconnecting {
+      background: var(--warn);
+    }
+    .trend-header-strip {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+      padding: 4px 8px;
+      background: var(--bg);
+      border-radius: var(--radius);
+      display: flex;
+      justify-content: space-between;
+    }
+
     /* Activity Feed */
     .activity-feed-container {
       background-color: var(--card);
@@ -717,14 +756,28 @@
       background: var(--card);
     }
 
-    /* Isolation Check Dialog/Card */
+    /* Isolation Check Dialog/Card (Fixed Modal - does not push content) */
     #isolationModal {
       display: none;
-      margin-bottom: 16px;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1000;
       background: var(--card);
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      padding: 16px;
+      padding: 20px;
+      width: 90%;
+      max-width: 620px;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.4);
+    }
+    #isolationBackdrop {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 999;
     }
 
     /* Technical Details Accordion */
@@ -878,6 +931,11 @@
         <p>Zero-load, real-time analytics across isolated PostgreSQL databases</p>
       </div>
       <div class="header-nav">
+        <!-- Live Status Indicator -->
+        <div style="display:inline-flex; align-items:center; margin-right:6px; font-size:12px; font-weight:600;">
+          <span class="header-live-dot" id="headerLiveDot"></span>
+          <span id="headerLiveText">Live</span>
+        </div>
         <!-- Tenant Dropdown -->
         <label for="tenantSelect" style="font-weight:600; font-size:12px; color:var(--muted);">STORE:</label>
         <select id="tenantSelect" title="Select store">
@@ -892,7 +950,10 @@
       </div>
     </header>
 
-    <!-- Isolation Check Banner / Result Box -->
+    <!-- Backdrop for Isolation Modal -->
+    <div id="isolationBackdrop"></div>
+
+    <!-- Isolation Check Banner / Result Box (Floating Modal) -->
     <div id="isolationModal">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
         <span style="font-weight:700; font-size:13px; text-transform:uppercase; color:var(--accent);">Tenant Isolation Security Verification</span>
@@ -930,14 +991,40 @@
           <span id="orderLatencyBadge" class="badge-freshness" style="display:none;"></span>
         </div>
         <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-          <span class="range-note" id="tenantSnappedRange">snapped: 2026-10-25 00:00 to 2026-10-26 00:00 UTC</span>
+          <span class="range-note" id="tenantSnappedRange">snapped: 2026-10-25 05:30 to 2026-10-26 05:30 IST</span>
           <div class="range-selector">
             <button class="btn-sm active" data-range="latest">Latest data</button>
+            <button class="btn-sm" data-range="live">Live (last 24 h)</button>
             <button class="btn-sm" data-range="24h">Last 24 hours</button>
             <button class="btn-sm" data-range="7d">Last 7 days</button>
             <button class="btn-sm" data-range="30d">Last 30 days</button>
           </div>
+          <div id="demoRangeSwitchNote" class="range-note" style="display:none; color:var(--accent); font-weight:600; width:100%; margin-top:4px;"></div>
         </div>
+      </div>
+
+      <!-- Store Actions Card in Store View (DEMO_MODE only) -->
+      <div class="card" id="tenantDemoControlsCard" style="display:none; border:1px solid var(--accent); margin-bottom:16px;">
+        <div class="card-header">
+          <span class="card-title" style="color:var(--accent);" id="tenantDemoCardTitle">Store Actions (Store 1)</span>
+          <span class="range-note" id="demoCurrentStoreLabel">Target: Store 1</span>
+        </div>
+        <div class="card-caption">Execute immediate simulated orders on this store's isolated database. Demo row IDs &ge; 900,000,000.</div>
+        <div class="demo-btn-group" style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <button id="btnTenantNewOrder" class="btn-sm btn-primary">New order</button>
+          <button id="btnTenantCancelOrder" class="btn-sm">Cancel last order</button>
+          <div style="display:inline-flex; align-items:center; gap:6px;">
+            <select id="tenantFloodCountSelect" style="padding:4px 8px; font-size:12px;">
+              <option value="50">50 orders</option>
+              <option value="200" selected>200 orders</option>
+              <option value="2000">2000 orders</option>
+            </select>
+            <button id="btnTenantFlood" class="btn-sm">Flood this store</button>
+          </div>
+          <button id="btnTenantStopFlood" class="btn-sm">Stop flood</button>
+          <button id="btnTenantResetDemo" class="btn-sm btn-danger">Reset demo data</button>
+        </div>
+        <div id="tenantDemoStatusMsg" style="margin-top:8px; font-size:12px; font-weight:600; color:var(--accent);"></div>
       </div>
 
       <!-- Metric Tiles with Period Comparison -->
@@ -972,9 +1059,13 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">Order Trend</span>
-            <span class="range-note">Axes in UTC · Tooltip in IST</span>
+            <span class="range-note">Hourly trend in IST</span>
           </div>
           <div class="card-caption">Hourly order volume and revenue trends</div>
+          <div class="trend-header-strip" id="tenantTrendStrip">
+            <span id="tenantTrendMaxLabel">Max: --</span>
+            <span id="tenantTrendLatestLabel">Latest: --</span>
+          </div>
           <div class="chart-container" id="tenantTrendChart">
             <svg id="tenantTrendSvg" viewBox="0 0 620 250" preserveAspectRatio="none"></svg>
           </div>
@@ -995,7 +1086,7 @@
           </div>
           <div class="card-caption">Distribution of order states across range</div>
           <div class="chart-container" id="tenantStatusChart">
-            <svg id="tenantStatusSvg" viewBox="0 0 320 250" preserveAspectRatio="none"></svg>
+            <svg id="tenantStatusSvg" viewBox="0 0 380 250" preserveAspectRatio="none"></svg>
           </div>
           <button class="data-toggle-btn" data-target="tenantStatusDataWrap">Show data</button>
           <div class="chart-data-table-wrap" id="tenantStatusDataWrap">
@@ -1015,7 +1106,7 @@
         </div>
         <div class="card-caption">Best-selling products in this store during the selected time period</div>
         <div class="chart-container" id="tenantProductsChart" style="height:210px;">
-          <svg id="tenantProductsSvg" viewBox="0 0 920 210" preserveAspectRatio="none"></svg>
+          <svg id="tenantProductsSvg" viewBox="0 0 960 210" preserveAspectRatio="none"></svg>
         </div>
         <button class="data-toggle-btn" data-target="tenantProductsDataWrap">Show data</button>
         <div class="chart-data-table-wrap" id="tenantProductsDataWrap">
@@ -1045,6 +1136,7 @@
         <button data-sub="health">System Health & Heatmap</button>
         <button data-sub="scale">Scale & Benchmark</button>
         <button data-sub="demo">Live Demo Controls</button>
+        <button data-sub="scorecard">Scorecard</button>
       </div>
 
       <!-- Sub Tab 1: Overview -->
@@ -1052,9 +1144,10 @@
         <div class="filter-bar">
           <span style="font-weight:700;">All 100 Stores Combined</span>
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-            <span class="range-note" id="adminSnappedRange">snapped UTC window</span>
+            <span class="range-note" id="adminSnappedRange">snapped window (IST)</span>
             <div class="range-selector">
               <button class="btn-sm active" data-admin-range="latest">Latest data</button>
+              <button class="btn-sm" data-admin-range="live">Live (last 24 h)</button>
               <button class="btn-sm" data-admin-range="24h">Last 24 hours</button>
               <button class="btn-sm" data-admin-range="7d">Last 7 days</button>
               <button class="btn-sm" data-admin-range="30d">Last 30 days</button>
@@ -1095,9 +1188,13 @@
           <div class="card">
             <div class="card-header">
               <span class="card-title">Cluster Hourly Trend</span>
-              <span class="range-note">UTC Buckets · Tooltip IST</span>
+              <span class="range-note">Hourly trend in IST</span>
             </div>
             <div class="card-caption">Aggregated hourly volume across all stores</div>
+            <div class="trend-header-strip" id="adminTrendStrip">
+              <span id="adminTrendMaxLabel">Max: --</span>
+              <span id="adminTrendLatestLabel">Latest: --</span>
+            </div>
             <div class="chart-container">
               <svg id="adminTrendSvg" viewBox="0 0 620 250" preserveAspectRatio="none"></svg>
             </div>
@@ -1119,7 +1216,7 @@
             </div>
             <div class="card-caption">Highest performing stores across the cluster</div>
             <div class="chart-container">
-              <svg id="adminTopTenantsSvg" viewBox="0 0 320 250" preserveAspectRatio="none"></svg>
+              <svg id="adminTopTenantsSvg" viewBox="0 0 380 250" preserveAspectRatio="none"></svg>
             </div>
             <div id="adminTopStoresNotice" class="empty-hours-notice"></div>
             <button class="data-toggle-btn" data-target="adminStoresDataWrap">Show data</button>
@@ -1139,7 +1236,7 @@
           </div>
           <div class="card-caption">Top products across all stores in the selected time period</div>
           <div class="chart-container" style="height:210px;">
-            <svg id="adminTopProductsSvg" viewBox="0 0 920 210" preserveAspectRatio="none"></svg>
+            <svg id="adminTopProductsSvg" viewBox="0 0 960 210" preserveAspectRatio="none"></svg>
           </div>
           <button class="data-toggle-btn" data-target="adminProductsDataWrap">Show data</button>
           <div class="chart-data-table-wrap" id="adminProductsDataWrap">
@@ -1283,14 +1380,17 @@
             <button id="btnFloodTenant">Flood Store 1 (10 orders)</button>
             <button id="btnStopFlood">Stop Flood</button>
             <button class="btn-danger" id="btnResetDemo">Reset Demo Data</button>
-            <button class="btn-primary" id="btnRunBenchmark">Compare: Direct Query vs Our Layer</button>
           </div>
           <div class="demo-telemetry-status" id="demoStatusText">
             Ready. Click "New Order" to watch changes propagate from tenant database to rollups in real-time.
           </div>
 
           <!-- Benchmark comparison -->
-          <div class="benchmark-grid">
+          <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
+            <button class="btn-primary" id="btnRunBenchmark">Compare: Selected Store</button>
+            <button class="btn-sm" id="btnRunBenchmarkBiggest">Compare: Biggest Store</button>
+          </div>
+          <div class="benchmark-grid" style="margin-top:12px;">
             <div class="bench-card">
               <div style="font-weight:700; font-size:12px; text-transform:uppercase; color:var(--muted); margin-bottom:4px;">
                 Direct Query on Tenant DB
@@ -1299,8 +1399,9 @@
                 Queries raw orders table directly; competes with tenant transactional traffic.
               </div>
               <div style="font-size:24px; font-weight:700;" id="naiveDuration">--</div>
-              <div style="font-size:12px; font-family:ui-monospace, Consolas, monospace; color:var(--muted);" id="naiveRows">0 rows scanned</div>
-              <div style="margin-top:6px;"><span class="tag-source direct">source: tenant database (direct)</span></div>
+              <div style="font-size:12px; font-family:ui-monospace, Consolas, monospace; color:var(--muted); margin-top:4px;" id="naiveRows">0 rows scanned</div>
+              <div style="font-size:11px; color:var(--muted); margin-top:4px;" id="naiveDetails">Profile: 1m · Store: 1 · Orders: --</div>
+              <div style="margin-top:6px;"><span class="tag-source direct">source: tenant database (direct EXPLAIN ANALYZE)</span></div>
             </div>
 
             <div class="bench-card" style="border-color:var(--accent);">
@@ -1308,14 +1409,120 @@
                 Our Summary Layer
               </div>
               <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">
-                Reads pre-aggregated summary tables; zero CPU or lock impact on tenant DB.
+                Reads small summary tables instead of scanning orders.
               </div>
               <div style="font-size:24px; font-weight:700; color:var(--accent);" id="rollupDuration">--</div>
-              <div style="font-size:12px; font-family:ui-monospace, Consolas, monospace; color:var(--muted);" id="rollupRows">Summary table read</div>
+              <div style="font-size:12px; font-family:ui-monospace, Consolas, monospace; color:var(--muted); margin-top:4px;" id="rollupRows">Summary table read</div>
+              <div style="font-size:11px; color:var(--muted); margin-top:4px;" id="rollupDetails">Median of 5 runs · warm cache</div>
               <div style="margin-top:6px;"><span class="tag-source rollup">source: summary tables</span></div>
               <div id="speedupBadge" style="margin-top:6px; font-weight:700; font-size:12px; color:var(--accent);"></div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Sub Tab 6: Scorecard -->
+      <div id="adminSub-scorecard" class="sub-content" style="display:none;">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Engineering Verification Scorecard</span>
+            <span class="range-note">Hardware: Balu laptop i5-1235U 15.7 GB · rerun pending on Lenovo</span>
+          </div>
+          <div class="card-caption">Empirical verification against PRD SLA targets across 1M and 10M datasets</div>
+          <div style="overflow-x:auto; margin-top:12px;">
+            <table class="data-table" style="font-size:12px;">
+              <thead>
+                <tr>
+                  <th>PRD Target Metric</th>
+                  <th>Good SLA</th>
+                  <th>Great SLA</th>
+                  <th>Our Goal</th>
+                  <th class="tabular">Measured (1M)</th>
+                  <th class="tabular">Measured (10M)</th>
+                  <th class="tabular">Scaling</th>
+                  <th>Hardware</th>
+                  <th>Status</th>
+                  <th>Source Evidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Order Count API (p95)</strong></td>
+                  <td>&lt; 50 ms</td>
+                  <td>&lt; 20 ms</td>
+                  <td>&lt; 15 ms</td>
+                  <td class="tabular">7.64 ms</td>
+                  <td class="tabular">13.60 ms</td>
+                  <td class="tabular">1.78&times;</td>
+                  <td>i5-1235U 15.7 GB</td>
+                  <td><span class="status-badge s200">PASS</span></td>
+                  <td><code>docs/results/scaling.json</code></td>
+                </tr>
+                <tr>
+                  <td><strong>Hourly Trend API (p95)</strong></td>
+                  <td>&lt; 50 ms</td>
+                  <td>&lt; 25 ms</td>
+                  <td>&lt; 20 ms</td>
+                  <td class="tabular">14.21 ms</td>
+                  <td class="tabular">17.64 ms</td>
+                  <td class="tabular">1.24&times;</td>
+                  <td>i5-1235U 15.7 GB</td>
+                  <td><span class="status-badge s200">PASS</span></td>
+                  <td><code>docs/results/scaling.json</code></td>
+                </tr>
+                <tr>
+                  <td><strong>Orders by Status (p95)</strong></td>
+                  <td>&lt; 40 ms</td>
+                  <td>&lt; 20 ms</td>
+                  <td>&lt; 15 ms</td>
+                  <td class="tabular">9.59 ms</td>
+                  <td class="tabular">10.85 ms</td>
+                  <td class="tabular">1.13&times;</td>
+                  <td>i5-1235U 15.7 GB</td>
+                  <td><span class="status-badge s200">PASS</span></td>
+                  <td><code>docs/results/scaling.json</code></td>
+                </tr>
+                <tr>
+                  <td><strong>Top-N Products (p95)</strong></td>
+                  <td>&lt; 100 ms</td>
+                  <td>&lt; 50 ms</td>
+                  <td>&lt; 30 ms</td>
+                  <td class="tabular">15.75 ms</td>
+                  <td class="tabular">64.44 ms</td>
+                  <td class="tabular">4.09&times;</td>
+                  <td>i5-1235U 15.7 GB</td>
+                  <td><span class="status-badge s200">PASS</span></td>
+                  <td><code>docs/results/scaling.json</code></td>
+                </tr>
+                <tr>
+                  <td><strong>Data Freshness (Event Mode)</strong></td>
+                  <td>&lt; 2.0 s</td>
+                  <td>&lt; 500 ms</td>
+                  <td>&lt; 100 ms</td>
+                  <td class="tabular">p50 ~27 ms</td>
+                  <td class="tabular">p50 40.3 / p95 99.7 / max 3,228 ms</td>
+                  <td class="tabular">Sub-sec</td>
+                  <td>i5-1235U 15.7 GB</td>
+                  <td><span class="status-badge s200">PASS</span></td>
+                  <td><code>docs/results/scaling.json</code></td>
+                </tr>
+                <tr>
+                  <td><strong>DB Safety Impact (Poll Mode)</strong></td>
+                  <td>&lt; 10% overhead</td>
+                  <td>&lt; 5% overhead</td>
+                  <td>&lt; 3% overhead</td>
+                  <td class="tabular">+35% to 45% load</td>
+                  <td class="tabular">not measured</td>
+                  <td class="tabular">High</td>
+                  <td>i5-1235U 15.7 GB</td>
+                  <td><span class="status-badge s403">FAIL</span></td>
+                  <td><code>docs/results/scaling.json</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
         </div>
       </div>
     </div>
@@ -1391,11 +1598,14 @@
         </div>
         <div style="font-size:13px; line-height:1.6;">
           <ul style="padding-left:18px;">
-            <li><strong>Strict Physical Isolation:</strong> Tenant stores have distinct PostgreSQL databases. Credentials never span across stores.</li>
-            <li><strong>Zero Transaction Interference:</strong> Analytical reporting queries never lock or scan the primary transactional databases.</li>
+            <li><strong>Database Separation:</strong> Tenant stores have distinct PostgreSQL databases. Missing key and wrong key are rejected with 403 by the server.</li>
+            <li><strong>Reads small summary tables instead of scanning orders:</strong> Analytical reporting queries read pre-aggregated summary tables in milliseconds.</li>
             <li><strong>Outbox Atomic Consistency:</strong> Changes are captured inside the primary ACID transaction, eliminating dual-write race conditions.</li>
             <li><strong>Deterministic Time Snapping:</strong> Rollups snap to whole-hour and whole-day boundaries, guaranteeing repeatable metrics.</li>
           </ul>
+        </div>
+        <div style="margin-top:12px; padding:10px 14px; background:var(--bg); border:1px solid var(--line); border-radius:var(--radius); font-size:12px; color:var(--text); line-height:1.5;">
+          <strong>Timezone Note:</strong> Rollup buckets are UTC hours. IST = UTC+5:30, so hourly bars start at :30 IST. Top-N days run 05:30 to 05:30 IST.
         </div>
       </div>
     </div>
@@ -1670,6 +1880,27 @@
     // -------------------------------------------------------------------------
     // TIME HELPERS (Durations & Snap Ranges)
     // -------------------------------------------------------------------------
+    function formatIST(isoStr, includeSeconds = false) {
+      if (!isoStr) return "n/a";
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return "n/a";
+      const opts = {
+        timeZone: "Asia/Kolkata",
+        hour12: false,
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      };
+      if (includeSeconds) opts.second = "2-digit";
+      return new Intl.DateTimeFormat("en-IN", opts).format(d) + " IST";
+    }
+
+    function formatISTTimeOnly(d = new Date()) {
+      return IST_FORMATTER.format(d) + " IST";
+    }
+
     function getRangeTimestamps(rangeKey) {
       if (rangeKey === 'latest') {
         // Last 24 hours of dataset (ending 30 Oct 2026)
@@ -1682,6 +1913,18 @@
       }
 
       const now = new Date();
+      if (rangeKey === 'live') {
+        // Ceiling to next whole hour
+        const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours() + 1, 0, 0));
+        const from = new Date(to.getTime() - 24 * 3600000);
+        return {
+          from: from.toISOString(),
+          to: to.toISOString(),
+          grain: "hour",
+          label: "Live (last 24 h)"
+        };
+      }
+
       let from;
       let to = new Date(now.getTime() + 3600000);
       let grain = 'hour';
@@ -1718,6 +1961,15 @@
         to: new Date(f).toISOString(),
         label: curr.label
       };
+    }
+
+    function addFeedItem(htmlContent) {
+      const feed = document.getElementById('tenantFeedList');
+      if (!feed) return;
+      const li = document.createElement('li');
+      li.innerHTML = `<span>${htmlContent}</span><span class="tabular">${formatISTTimeOnly()}</span>`;
+      feed.insertBefore(li, feed.firstChild);
+      if (feed.children.length > 12) feed.removeChild(feed.lastChild);
     }
 
     // -------------------------------------------------------------------------
@@ -1761,15 +2013,43 @@
 
     function renderTenantView(d) {
       if (d.count && d.count.range) {
-        const fromStr = d.count.range.from.replace('T', ' ').slice(0, 16);
-        const toStr = d.count.range.to.replace('T', ' ').slice(0, 16);
-        document.getElementById('tenantSnappedRange').textContent = `snapped UTC: ${fromStr} to ${toStr}`;
+        document.getElementById('tenantSnappedRange').textContent = `snapped: ${formatIST(d.count.range.from)} to ${formatIST(d.count.range.to)}`;
       }
 
-      const orders = d.count ? d.count.data.order_count : 0;
-      const sales = d.count ? d.count.data.total_sales : 0.0;
-      document.getElementById('tenantOrdersCount').textContent = orders.toLocaleString();
-      document.getElementById('tenantSalesTotal').textContent = `$${sales.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+      const orders = d.count ? (d.count.data ? d.count.data.order_count : 0) : 0;
+      const sales = d.count ? (d.count.data ? d.count.data.total_sales : 0.0) : 0.0;
+
+      const ordersEl = document.getElementById('tenantOrdersCount');
+      const salesEl = document.getElementById('tenantSalesTotal');
+
+      // Live delta flash & badge (Task 2)
+      if (state.lastOrderCount !== null && orders !== state.lastOrderCount) {
+        const diffOrders = orders - state.lastOrderCount;
+        ordersEl.classList.remove('tile-flash');
+        void ordersEl.offsetWidth;
+        ordersEl.classList.add('tile-flash');
+        const sign = diffOrders > 0 ? '+' : '';
+        ordersEl.innerHTML = `${orders.toLocaleString()} <span class="tile-delta">${sign}${diffOrders}</span>`;
+        setTimeout(() => {
+          ordersEl.textContent = orders.toLocaleString();
+        }, 1200);
+      } else {
+        ordersEl.textContent = orders.toLocaleString();
+      }
+
+      if (state.lastSales !== null && Math.abs(sales - state.lastSales) > 0.009) {
+        const diffSales = sales - state.lastSales;
+        salesEl.classList.remove('tile-flash');
+        void salesEl.offsetWidth;
+        salesEl.classList.add('tile-flash');
+        const sign = diffSales > 0 ? '+' : '-';
+        salesEl.innerHTML = `$${sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})} <span class="tile-delta">${sign}$${Math.abs(diffSales).toFixed(2)}</span>`;
+        setTimeout(() => {
+          salesEl.textContent = `$${sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+        }, 1200);
+      } else {
+        salesEl.textContent = `$${sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+      }
 
       // Period Comparison (B.4)
       if (d.prevCount && d.prevCount.data) {
@@ -1829,25 +2109,41 @@
 
       document.getElementById('freshnessBadge').textContent = `Up to date · checked just now`;
 
-      if (state.orderClickTime) {
-        const elapsed = Math.round(performance.now() - state.orderClickTime);
+      // Latency Badge (Task 4)
+      if (state.pendingDemoOrder) {
+        const commitTs = new Date(state.pendingDemoOrder.commit_ts).getTime();
+        const nowMs = Date.now();
+        const visibleMs = Math.max(1, nowMs - commitTs);
+        const roundTripMs = state.orderClickTime ? Math.round(performance.now() - state.orderClickTime) : "n/a";
+
+        let workerAppliedStr = "n/a";
+        if (d.count && d.count.as_of) {
+          const asOfMs = new Date(d.count.as_of).getTime();
+          if (asOfMs >= commitTs) {
+            workerAppliedStr = `${Math.max(1, asOfMs - commitTs)} ms`;
+          }
+        }
+
         const badge = document.getElementById('orderLatencyBadge');
         badge.style.display = 'inline-block';
         badge.className = 'badge-freshness live-order';
-        badge.textContent = `visible in ${elapsed} ms (server: ${Math.round(lag * 1000)} ms, round-trip: ${elapsed} ms)`;
+        badge.textContent = `visible in ${visibleMs} ms (commit \u2192 worker: ${workerAppliedStr}, round-trip: ${roundTripMs} ms [includes proxy + render])`;
+        state.pendingDemoOrder = null;
         state.orderClickTime = null;
       }
 
-      if (state.lastOrderCount !== null && orders > state.lastOrderCount) {
-        const diff = orders - state.lastOrderCount;
-        const now = new Date();
-        const timeStr = IST_FORMATTER.format(now) + " IST";
-        const feed = document.getElementById('tenantFeedList');
-        const li = document.createElement('li');
-        li.innerHTML = `<span>+${diff} orders in Store ${state.tenantId}</span><span class="tabular">${timeStr}</span>`;
-        feed.insertBefore(li, feed.firstChild);
-        if (feed.children.length > 10) feed.removeChild(feed.lastChild);
+      // Check for top-10 rank changes
+      if (state.lastTopProducts && d.products && d.products.data) {
+        const oldFirst = state.lastTopProducts[0] ? state.lastTopProducts[0].product_id : null;
+        const newFirst = d.products.data[0] ? d.products.data[0].product_id : null;
+        if (oldFirst && newFirst && oldFirst !== newFirst) {
+          addFeedItem(`Rank change: Product #${newFirst} took #1 spot from #${oldFirst} (Store ${state.tenantId})`);
+        }
       }
+      if (d.products && d.products.data) {
+        state.lastTopProducts = d.products.data;
+      }
+
       state.lastOrderCount = orders;
       state.lastSales = sales;
 
@@ -1913,7 +2209,7 @@
       document.getElementById('adminCancelledShare').textContent = `${cancelShare.toFixed(1)}%`;
 
       if (d.range) {
-        document.getElementById('adminSnappedRange').textContent = `snapped UTC: ${d.range.from.slice(5, 16)} to ${d.range.to.slice(5, 16)}`;
+        document.getElementById('adminSnappedRange').textContent = `snapped: ${formatIST(d.range.from)} to ${formatIST(d.range.to)}`;
       }
 
       renderTrendSvg(document.getElementById('adminTrendSvg'), d.trend || [], 'adminTrendEmptyNotice', 'adminTrendTableContent', 'adminTrendCsv');
@@ -1953,15 +2249,20 @@
 
     function renderAdminHealth(m) {
       if (!m) return;
-      const workerMode = m.worker_mode || (m.worker ? m.worker.mode : 'event');
-      document.getElementById('workerModeLabel').textContent = `Worker: ${workerMode} mode · Loop: ${(m.loop_time_ms || 22.5).toFixed(1)}ms`;
+      const workerMode = m.worker_mode || (m.worker ? m.worker.mode : 'unknown');
+      const loopTimeStr = (m.loop_time_ms !== null && m.loop_time_ms !== undefined) ? `${m.loop_time_ms.toFixed(1)}ms` : 'n/a';
+      document.getElementById('workerModeLabel').textContent = `Worker: ${workerMode} mode · Loop: ${loopTimeStr}`;
 
       // System Health stat tiles (B.6)
       const maxLag = m.max_lag_seconds !== undefined ? m.max_lag_seconds : 0.0;
       const medianLag = m.median_lag_seconds !== undefined ? m.median_lag_seconds : 0.0;
       const worstStore = m.worst_tenant_id ? `Store ${m.worst_tenant_id}` : 'Store 1';
       const changesWaiting = m.changes_waiting !== undefined ? m.changes_waiting : 0;
-      const eventsRate = m.worker && m.worker.events_per_sec ? `${m.worker.events_per_sec.toFixed(1)} /s` : '42.0 /s';
+      
+      // Task 8: events rate is "n/a" if not measurable
+      const eventsRate = (m.worker && m.worker.events_per_sec !== null && m.worker.events_per_sec !== undefined) 
+        ? `${m.worker.events_per_sec.toFixed(1)} /s` 
+        : 'n/a';
 
       document.getElementById('healthMedianLag').textContent = `${medianLag.toFixed(2)} s`;
       document.getElementById('healthWorstLag').textContent = `${maxLag.toFixed(2)} s`;
@@ -1974,7 +2275,7 @@
       // Update How It Works live numbers
       document.getElementById('howChangesWaiting').textContent = changesWaiting.toLocaleString();
       document.getElementById('howSecondsBehind').textContent = `${maxLag.toFixed(2)}s`;
-      document.getElementById('howBatchesProcessed').textContent = (m.worker && m.worker.uptime_seconds ? Math.round(m.worker.uptime_seconds / 2) : 1420).toLocaleString();
+      document.getElementById('howBatchesProcessed').textContent = (m.worker && m.worker.uptime_seconds) ? Math.round(m.worker.uptime_seconds / 2).toLocaleString() : 'n/a';
 
       // Render 10x10 Heatmap (Bug A.2)
       const grid = document.getElementById('heatmapGrid');
@@ -2075,7 +2376,17 @@
       }
 
       const maxVal = Math.max(...points.map(p => p.order_count), 1);
-      const minVal = Math.min(...points.map(p => p.order_count));
+      let maxPt = points[0], latestPt = points[points.length - 1];
+      points.forEach(p => {
+        if (p.order_count >= maxPt.order_count) maxPt = p;
+      });
+
+      // Update header strip with Max and Latest (Task 6)
+      const stripId = svg.id === 'adminTrendSvg' ? 'adminTrendStrip' : 'tenantTrendStrip';
+      const strip = document.getElementById(stripId);
+      if (strip) {
+        strip.innerHTML = `<span><strong>Max:</strong> ${maxPt.order_count.toLocaleString()} orders ($${maxPt.sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})})</span><span><strong>Latest:</strong> ${latestPt.order_count.toLocaleString()} orders ($${latestPt.sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})})</span>`;
+      }
 
       // Numeric Y-axis ticks with units
       [0, 0.5, 1.0].forEach(frac => {
@@ -2101,15 +2412,12 @@
 
       // Plot line and points
       let dPath = '';
-      let maxPt = points[0], minPt = points[0], latestPt = points[points.length - 1];
+      const step = Math.max(1, Math.floor(points.length / 6));
 
       points.forEach((p, idx) => {
         const x = padL + (idx / Math.max(points.length - 1, 1)) * innerW;
         const y = (h - padB) - (p.order_count / maxVal) * innerH;
         dPath += (idx === 0 ? 'M' : 'L') + `${x.toFixed(1)},${y.toFixed(1)} `;
-
-        if (p.order_count > maxPt.order_count) maxPt = p;
-        if (p.order_count < minPt.order_count) minPt = p;
 
         // Point circle
         const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -2121,22 +2429,21 @@
         dot.setAttribute('stroke-width', '1');
         dot.setAttribute('class', 'chart-point');
 
-        const dUtc = p.bucket.replace('T', ' ').slice(0, 16) + ' UTC';
-        const dIst = IST_DATE_FORMATTER.format(new Date(p.bucket)) + ' IST';
-        const tip = `${p.order_count} orders ($${p.sales.toFixed(2)})\n${dUtc} · ${dIst}`;
+        const dIst = formatIST(p.bucket);
+        const tip = `${p.order_count.toLocaleString()} orders ($${p.sales.toFixed(2)})\n${dIst}`;
 
         dot.addEventListener('mouseenter', (e) => showGlobalTooltip(e, tip));
         dot.addEventListener('mouseleave', hideGlobalTooltip);
         svg.appendChild(dot);
 
-        // X-axis label for some points
-        if (idx === 0 || idx === Math.floor(points.length / 2) || idx === points.length - 1) {
+        // X-axis label every 3 to 4 hours in IST (Task 6)
+        if (idx % step === 0 || idx === points.length - 1) {
           const xLbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
           xLbl.setAttribute('x', x);
           xLbl.setAttribute('y', h - padB + 16);
           xLbl.setAttribute('text-anchor', 'middle');
           xLbl.setAttribute('class', 'axis-text');
-          xLbl.textContent = p.bucket.slice(11, 16) + ' UTC';
+          xLbl.textContent = formatISTTimeOnly(new Date(p.bucket)).slice(0, 5) + ' IST';
           svg.appendChild(xLbl);
         }
       });
@@ -2146,42 +2453,15 @@
       path.setAttribute('class', 'chart-line');
       svg.appendChild(path);
 
-      // Value labels for max, min, and latest (B.1)
-      const maxIdx = points.indexOf(maxPt);
-      const maxX = padL + (maxIdx / Math.max(points.length - 1, 1)) * innerW;
-      const maxY = (h - padB) - (maxPt.order_count / maxVal) * innerH;
-
-      const maxText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      maxText.setAttribute('x', maxX);
-      maxText.setAttribute('y', Math.max(maxY - 8, padT + 10));
-      maxText.setAttribute('text-anchor', 'middle');
-      maxText.setAttribute('class', 'axis-text');
-      maxText.setAttribute('fill', 'var(--accent)');
-      maxText.style.fontWeight = '700';
-      maxText.textContent = `max: ${maxPt.order_count}`;
-      svg.appendChild(maxText);
-
-      // Latest label
-      const latestX = padL + innerW;
-      const latestY = (h - padB) - (latestPt.order_count / maxVal) * innerH;
-      const latestText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      latestText.setAttribute('x', latestX);
-      latestText.setAttribute('y', Math.max(latestY - 8, padT + 10));
-      latestText.setAttribute('text-anchor', 'end');
-      latestText.setAttribute('class', 'axis-text');
-      latestText.style.fontWeight = '700';
-      latestText.textContent = `latest: ${latestPt.order_count}`;
-      svg.appendChild(latestText);
-
-      // Render "Show data" table (B.3)
+      // Render "Show data" table (IST primary, UTC small second column)
       if (tableContentId) {
-        let csv = "bucket_utc,bucket_ist,order_count,sales_usd\n";
-        let rowsHtml = `<table class="data-table" style="font-size:11px;"><thead><tr><th>Bucket (UTC)</th><th>Bucket (IST)</th><th class="tabular">Orders</th><th class="tabular">Sales ($)</th></tr></thead><tbody>`;
+        let csv = "bucket_ist,bucket_utc,order_count,sales_usd\n";
+        let rowsHtml = `<table class="data-table" style="font-size:11px;"><thead><tr><th>Bucket (IST)</th><th style="font-size:10px; color:var(--muted);">UTC</th><th class="tabular">Orders</th><th class="tabular">Sales ($)</th></tr></thead><tbody>`;
         points.forEach(p => {
-          const dUtc = p.bucket.slice(0, 16) + ' UTC';
-          const dIst = IST_DATE_FORMATTER.format(new Date(p.bucket)) + ' IST';
-          csv += `"${p.bucket}","${dIst}",${p.order_count},${p.sales.toFixed(2)}\n`;
-          rowsHtml += `<tr><td>${dUtc}</td><td>${dIst}</td><td class="tabular">${p.order_count.toLocaleString()}</td><td class="tabular">$${p.sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td></tr>`;
+          const dUtc = p.bucket.slice(0, 16);
+          const dIst = formatIST(p.bucket);
+          csv += `"${dIst}","${dUtc}",${p.order_count},${p.sales.toFixed(2)}\n`;
+          rowsHtml += `<tr><td><strong>${dIst}</strong></td><td style="font-size:10px; color:var(--muted);">${dUtc}</td><td class="tabular">${p.order_count.toLocaleString()}</td><td class="tabular">$${p.sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td></tr>`;
         });
         rowsHtml += `</tbody></table>`;
         document.getElementById(tableContentId).innerHTML = rowsHtml;
@@ -2189,13 +2469,12 @@
       }
     }
 
-    // 2. Orders by Status Bar Chart (Bug A.1 Fix + Exact Labels)
+    // 2. Orders by Status Bar Chart (Reserved right padding so labels never clip)
     function renderStatusSvg(svg, statusResponse, tableContentId, csvKey) {
       if (!svg) return;
       svg.innerHTML = '';
-      const w = 320, h = 250, padL = 90, padR = 70, padT = 20, padB = 30;
+      const w = 380, h = 250, padL = 85, padR = 100, padT = 20, padB = 30;
 
-      // Extract list from various API shapes
       let list = [];
       if (Array.isArray(statusResponse)) {
         list = statusResponse;
@@ -2257,7 +2536,6 @@
         const barW = (item.order_count / maxOrders) * innerW;
         const sharePct = totalOrders > 0 ? ((item.order_count / totalOrders) * 100).toFixed(1) : '0.0';
 
-        // Label on left
         const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         lbl.setAttribute('x', padL - 8);
         lbl.setAttribute('y', y + 15);
@@ -2266,7 +2544,6 @@
         lbl.textContent = item.status;
         svg.appendChild(lbl);
 
-        // Bar
         const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         rect.setAttribute('x', padL);
         rect.setAttribute('y', y);
@@ -2279,7 +2556,7 @@
         rect.addEventListener('mouseleave', hideGlobalTooltip);
         svg.appendChild(rect);
 
-        // Exact number at end of bar (B.1)
+        // Exact number at end of bar (Reserved space avoids clipping)
         const valText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         valText.setAttribute('x', padL + Math.max(barW, 2) + 6);
         valText.setAttribute('y', y + 15);
@@ -2302,7 +2579,7 @@
     function renderProductsSvg(svg, prods, tableContentId, csvKey) {
       if (!svg) return;
       svg.innerHTML = '';
-      const w = 920, h = 210, padL = 70, padB = 40, padT = 20, padR = 25;
+      const w = 960, h = 210, padL = 70, padB = 40, padT = 25, padR = 30;
       const innerW = w - padL - padR;
       const innerH = h - padT - padB;
 
@@ -2365,22 +2642,22 @@
         rect.addEventListener('mouseleave', hideGlobalTooltip);
         svg.appendChild(rect);
 
-        // Product label below
+        // Product label below (Task 6)
         const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         lbl.setAttribute('x', x + barW / 2);
         lbl.setAttribute('y', h - padB + 16);
         lbl.setAttribute('text-anchor', 'middle');
         lbl.setAttribute('class', 'axis-text');
-        lbl.textContent = `#${p.product_id}`;
+        lbl.textContent = `#${p.product_id}${p.category ? ' (' + p.category.slice(0, 6) + ')' : ''}`;
         svg.appendChild(lbl);
 
-        // Exact value on top of bar (B.1)
+        // Exact value on top of bar (Task 6)
         const valText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         valText.setAttribute('x', x + barW / 2);
         valText.setAttribute('y', Math.max(y - 5, padT));
         valText.setAttribute('text-anchor', 'middle');
         valText.setAttribute('class', 'axis-text tabular');
-        valText.textContent = `$${Math.round(p.sales)}`;
+        valText.textContent = `$${Math.round(p.sales).toLocaleString()}`;
         svg.appendChild(valText);
 
         csv += `${idx + 1},${p.product_id},"${p.category || 'General'}",${p.units},${p.sales.toFixed(2)},${sharePct}%\n`;
@@ -2394,18 +2671,17 @@
       }
     }
 
-    // 4. Top 10 Stores Horizontal Bar Chart (Bug A.3 Fix)
+    // 4. Top 10 Stores Horizontal Bar Chart
     function renderTopTenantsSvg(svg, tenants, noticeId, tableContentId, csvKey) {
       if (!svg) return;
       svg.innerHTML = '';
-      const w = 320, h = 250, padL = 75, padR = 80, padT = 15, padB = 30;
+      const w = 380, h = 250, padL = 75, padR = 100, padT = 15, padB = 30;
 
       if (!tenants || tenants.length === 0) {
         if (noticeId) document.getElementById(noticeId).textContent = "only 0 stores had sales in this range";
         return;
       }
 
-      // Check if fewer than 10 stores (Bug A.3)
       if (noticeId) {
         if (tenants.length < 10) {
           document.getElementById(noticeId).textContent = `only ${tenants.length} stores had sales in this range`;
@@ -2654,7 +2930,7 @@
           <div style="margin-top:6px;"><strong>Test 2 (Cross-Store Key):</strong> <code>GET /tenants/${tid}/...</code> with Store ${otherTid}'s key &rarr; <span style="color:var(--ok); font-weight:700;">${resCrossKey}</span></div>
         </div>
         <div style="font-weight:700; color:var(--text);">
-          Result: Blocked: 403. A store cannot read another store's data. Physical tenant isolation verified.
+          Result: Missing key and wrong key are rejected with 403 by the server. Physical tenant isolation verified.
         </div>
       `;
     });
@@ -2664,92 +2940,311 @@
     });
 
     // -------------------------------------------------------------------------
-    // DEMO CONTROLS EVENT HANDLERS
+    // STORE ACTIONS & DEMO CONTROLS (DEMO_MODE=1)
     // -------------------------------------------------------------------------
-    document.getElementById('btnNewOrder').addEventListener('click', async () => {
-      try {
-        state.orderClickTime = performance.now();
-        document.getElementById('demoStatusText').textContent = `Submitting new order to Store ${state.tenantId} database...`;
-        const res = await inspectedFetch('/ui-api/demo/order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tenant_id: state.tenantId })
-        }, "tenant database (direct)", "Demo Order");
+    function updateStoreCardLabels(tid) {
+      const titleEl = document.getElementById('tenantDemoCardTitle');
+      const labelEl = document.getElementById('demoCurrentStoreLabel');
+      if (titleEl) titleEl.textContent = `Store Actions (Store ${tid})`;
+      if (labelEl) labelEl.textContent = `Target: Store ${tid}`;
+    }
 
-        document.getElementById('demoStatusText').textContent = `Order #${res.order_id} placed ($${res.total.toFixed(2)}) on Store ${state.tenantId}. Worker ingesting change...`;
-        await refreshTenantView();
-      } catch (err) {
-        document.getElementById('demoStatusText').textContent = `Order creation failed: ${err.message}`;
+    function autoSwitchToLiveIfNeeded() {
+      if (state.tenantRange !== 'live') {
+        state.tenantRange = 'live';
+        document.querySelectorAll('#viewTenant .range-selector button').forEach(b => {
+          if (b.getAttribute('data-range') === 'live') {
+            b.classList.add('active');
+          } else {
+            b.classList.remove('active');
+          }
+        });
+        const note = document.getElementById('demoRangeSwitchNote');
+        if (note) {
+          note.textContent = `Demo orders are dated now (${formatIST(new Date().toISOString())}), so showing Live range.`;
+          note.style.display = 'block';
+        }
       }
-    });
+    }
 
-    document.getElementById('btnCancelLast').addEventListener('click', async () => {
-      try {
-        const res = await inspectedFetch('/ui-api/demo/cancel', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tenant_id: state.tenantId })
-        }, "tenant database (direct)", "Demo Cancel");
-        document.getElementById('demoStatusText').textContent = `Order #${res.order_id} marked as 'canceled'.`;
-        await refreshTenantView();
-      } catch (err) {
-        document.getElementById('demoStatusText').textContent = `Cancel failed: ${err.message}`;
-      }
-    });
+    // 1. Store View Actions (Directly in Store View Card)
+    const btnTenantNewOrder = document.getElementById('btnTenantNewOrder');
+    if (btnTenantNewOrder) {
+      btnTenantNewOrder.addEventListener('click', async () => {
+        try {
+          autoSwitchToLiveIfNeeded();
+          state.orderClickTime = performance.now();
+          const msgEl = document.getElementById('tenantDemoStatusMsg');
+          if (msgEl) msgEl.textContent = `Submitting new order to Store ${state.tenantId} database...`;
+          const res = await inspectedFetch('/ui-api/demo/order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tenant_id: state.tenantId })
+          }, "tenant database (direct)", "Demo Order");
 
-    document.getElementById('btnFloodTenant').addEventListener('click', async () => {
-      try {
-        await inspectedFetch('/ui-api/demo/flood', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tenant_id: state.tenantId, n: 10 })
-        }, "tenant database (direct)", "Demo Flood");
-        document.getElementById('demoStatusText').textContent = `Flood initiated: 10 orders streaming to Store ${state.tenantId}.`;
-      } catch (err) {
-        document.getElementById('demoStatusText').textContent = `Flood failed: ${err.message}`;
-      }
-    });
+          state.pendingDemoOrder = res;
+          if (msgEl) msgEl.textContent = `Order #${res.order_id} placed ($${res.total.toFixed(2)}) on Store ${state.tenantId}. Worker ingesting change...`;
+          addFeedItem(`${formatISTTimeOnly()} \u00b7 New order #${res.order_id} \u00b7 $${res.total.toFixed(2)} \u00b7 delivered (Store ${state.tenantId})`);
+          await refreshTenantView();
+        } catch (err) {
+          const msgEl = document.getElementById('tenantDemoStatusMsg');
+          if (msgEl) msgEl.textContent = `Order creation failed for Store ${state.tenantId}: ${err.message}`;
+        }
+      });
+    }
 
-    document.getElementById('btnStopFlood').addEventListener('click', async () => {
-      try {
-        await inspectedFetch('/ui-api/demo/flood/stop', { method: 'POST' }, "tenant database (direct)", "Demo Stop");
-        document.getElementById('demoStatusText').textContent = 'Order flood stopped.';
-      } catch (err) {}
-    });
+    const btnTenantCancelOrder = document.getElementById('btnTenantCancelOrder');
+    if (btnTenantCancelOrder) {
+      btnTenantCancelOrder.addEventListener('click', async () => {
+        try {
+          const msgEl = document.getElementById('tenantDemoStatusMsg');
+          if (msgEl) msgEl.textContent = `Canceling last order on Store ${state.tenantId}...`;
+          const res = await inspectedFetch('/ui-api/demo/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tenant_id: state.tenantId })
+          }, "tenant database (direct)", "Demo Cancel");
 
-    document.getElementById('btnResetDemo').addEventListener('click', async () => {
-      if (!confirm('Reset all demo orders and verify clean state?')) return;
-      try {
-        const res = await inspectedFetch('/ui-api/demo/reset', { method: 'POST' }, "tenant database (direct)", "Demo Reset");
-        document.getElementById('demoStatusText').textContent = `Reset complete: ${res.deleted_orders} orders cleared.`;
-        await refreshTenantView();
-        await refreshAdminView();
-      } catch (err) {
-        document.getElementById('demoStatusText').textContent = `Reset failed: ${err.message}`;
-      }
-    });
+          if (res.status === 'canceled') {
+            if (msgEl) msgEl.textContent = `Order #${res.order_id} marked as 'canceled' on Store ${state.tenantId}.`;
+            addFeedItem(`${formatISTTimeOnly()} \u00b7 Cancel order #${res.order_id} (Store ${state.tenantId})`);
+          } else {
+            if (msgEl) msgEl.textContent = `No active demo orders found for Store ${state.tenantId}.`;
+          }
+          await refreshTenantView();
+        } catch (err) {
+          const msgEl = document.getElementById('tenantDemoStatusMsg');
+          if (msgEl) msgEl.textContent = `Cancel failed for Store ${state.tenantId}: ${err.message}`;
+        }
+      });
+    }
 
-    document.getElementById('btnRunBenchmark').addEventListener('click', async () => {
+    const btnTenantFlood = document.getElementById('btnTenantFlood');
+    if (btnTenantFlood) {
+      btnTenantFlood.addEventListener('click', async () => {
+        try {
+          autoSwitchToLiveIfNeeded();
+          const n = parseInt(document.getElementById('tenantFloodCountSelect').value, 10) || 200;
+          const msgEl = document.getElementById('tenantDemoStatusMsg');
+          if (msgEl) msgEl.textContent = `Flood initiated: ${n} orders streaming to Store ${state.tenantId}...`;
+          await inspectedFetch('/ui-api/demo/flood', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tenant_id: state.tenantId, n })
+          }, "tenant database (direct)", "Demo Flood");
+          addFeedItem(`${formatISTTimeOnly()} \u00b7 Flood started (${n} orders/s) on Store ${state.tenantId}`);
+        } catch (err) {
+          const msgEl = document.getElementById('tenantDemoStatusMsg');
+          if (msgEl) msgEl.textContent = `Flood failed for Store ${state.tenantId}: ${err.message}`;
+        }
+      });
+    }
+
+    const btnTenantStopFlood = document.getElementById('btnTenantStopFlood');
+    if (btnTenantStopFlood) {
+      btnTenantStopFlood.addEventListener('click', async () => {
+        try {
+          await inspectedFetch('/ui-api/demo/flood/stop', { method: 'POST' }, "tenant database (direct)", "Demo Stop");
+          const msgEl = document.getElementById('tenantDemoStatusMsg');
+          if (msgEl) msgEl.textContent = `Order flood stopped for Store ${state.tenantId}.`;
+          addFeedItem(`${formatISTTimeOnly()} \u00b7 Flood stopped (Store ${state.tenantId})`);
+        } catch (err) {}
+      });
+    }
+
+    const btnTenantResetDemo = document.getElementById('btnTenantResetDemo');
+    if (btnTenantResetDemo) {
+      btnTenantResetDemo.addEventListener('click', async () => {
+        if (!confirm(`Reset demo orders for Store ${state.tenantId} and all stores?`)) return;
+        try {
+          const res = await inspectedFetch('/ui-api/demo/reset', { method: 'POST' }, "tenant database (direct)", "Demo Reset");
+          const msgEl = document.getElementById('tenantDemoStatusMsg');
+          if (msgEl) msgEl.textContent = `Reset complete: ${res.deleted_orders} demo orders cleared.`;
+          addFeedItem(`${formatISTTimeOnly()} \u00b7 Demo reset: cleared ${res.deleted_orders} orders`);
+          await refreshTenantView();
+          await refreshAdminView();
+        } catch (err) {
+          const msgEl = document.getElementById('tenantDemoStatusMsg');
+          if (msgEl) msgEl.textContent = `Reset failed: ${err.message}`;
+        }
+      });
+    }
+
+    // 2. Admin Sub-Tab Demo Handlers (Preserved for Admin tab)
+    const btnNewOrder = document.getElementById('btnNewOrder');
+    if (btnNewOrder) {
+      btnNewOrder.addEventListener('click', async () => {
+        try {
+          state.orderClickTime = performance.now();
+          document.getElementById('demoStatusText').textContent = `Submitting new order to Store ${state.tenantId} database...`;
+          const res = await inspectedFetch('/ui-api/demo/order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tenant_id: state.tenantId })
+          }, "tenant database (direct)", "Demo Order");
+
+          state.pendingDemoOrder = res;
+          document.getElementById('demoStatusText').textContent = `Order #${res.order_id} placed ($${res.total.toFixed(2)}) on Store ${state.tenantId}. Worker ingesting change...`;
+          addFeedItem(`${formatISTTimeOnly()} \u00b7 New order #${res.order_id} \u00b7 $${res.total.toFixed(2)} \u00b7 delivered (Store ${state.tenantId})`);
+          await refreshTenantView();
+        } catch (err) {
+          document.getElementById('demoStatusText').textContent = `Order creation failed: ${err.message}`;
+        }
+      });
+    }
+
+    const btnCancelLast = document.getElementById('btnCancelLast');
+    if (btnCancelLast) {
+      btnCancelLast.addEventListener('click', async () => {
+        try {
+          const res = await inspectedFetch('/ui-api/demo/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tenant_id: state.tenantId })
+          }, "tenant database (direct)", "Demo Cancel");
+          document.getElementById('demoStatusText').textContent = `Order #${res.order_id} marked as 'canceled'.`;
+          addFeedItem(`${formatISTTimeOnly()} \u00b7 Cancel order #${res.order_id} (Store ${state.tenantId})`);
+          await refreshTenantView();
+        } catch (err) {
+          document.getElementById('demoStatusText').textContent = `Cancel failed: ${err.message}`;
+        }
+      });
+    }
+
+    const btnFloodTenant = document.getElementById('btnFloodTenant');
+    if (btnFloodTenant) {
+      btnFloodTenant.addEventListener('click', async () => {
+        try {
+          await inspectedFetch('/ui-api/demo/flood', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tenant_id: state.tenantId, n: 10 })
+          }, "tenant database (direct)", "Demo Flood");
+          document.getElementById('demoStatusText').textContent = `Flood initiated: 10 orders streaming to Store ${state.tenantId}.`;
+        } catch (err) {
+          document.getElementById('demoStatusText').textContent = `Flood failed: ${err.message}`;
+        }
+      });
+    }
+
+    const btnStopFlood = document.getElementById('btnStopFlood');
+    if (btnStopFlood) {
+      btnStopFlood.addEventListener('click', async () => {
+        try {
+          await inspectedFetch('/ui-api/demo/flood/stop', { method: 'POST' }, "tenant database (direct)", "Demo Stop");
+          document.getElementById('demoStatusText').textContent = 'Order flood stopped.';
+        } catch (err) {}
+      });
+    }
+
+    const btnResetDemo = document.getElementById('btnResetDemo');
+    if (btnResetDemo) {
+      btnResetDemo.addEventListener('click', async () => {
+        if (!confirm('Reset all demo orders and verify clean state?')) return;
+        try {
+          const res = await inspectedFetch('/ui-api/demo/reset', { method: 'POST' }, "tenant database (direct)", "Demo Reset");
+          document.getElementById('demoStatusText').textContent = `Reset complete: ${res.deleted_orders} orders cleared.`;
+          await refreshTenantView();
+          await refreshAdminView();
+        } catch (err) {
+          document.getElementById('demoStatusText').textContent = `Reset failed: ${err.message}`;
+        }
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // BENCHMARK COMPARISON (Direct Query vs Our Layer)
+    // -------------------------------------------------------------------------
+    async function runBenchmark(tid) {
       document.getElementById('naiveDuration').textContent = 'Querying...';
       document.getElementById('rollupDuration').textContent = 'Querying...';
+      document.getElementById('speedupBadge').textContent = 'Running 5 iterations...';
 
       try {
-        const naiveRes = await inspectedFetch(`/ui-api/demo/naive/${state.tenantId}`, {}, "tenant database (direct)", "Benchmark Naive");
-        document.getElementById('naiveDuration').textContent = `${naiveRes.elapsed_ms.toFixed(1)} ms`;
-        document.getElementById('naiveRows').textContent = `${naiveRes.rows_count} rows scanned in tenant DB`;
+        const res = await inspectedFetch(`/ui-api/demo/naive/${tid}`, {}, "tenant database (direct)", "Benchmark Naive");
+        document.getElementById('naiveDuration').textContent = `${res.direct_median_ms.toFixed(1)} ms`;
+        document.getElementById('naiveRows').textContent = `${res.rows_scanned.toLocaleString()} rows scanned in tenant DB`;
+        document.getElementById('naiveDetails').textContent = `Profile: ${res.profile} \u00b7 Store: ${res.tenant_id} \u00b7 Orders: ${res.order_count.toLocaleString()} (cold: ${res.direct_cold_ms}ms, warm: ${res.direct_warm_ms}ms)`;
 
-        const t0 = performance.now();
-        const r = getRangeTimestamps(state.tenantRange);
-        await inspectedFetch(`/ui-api/tenants/${state.tenantId}/products/top?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}&n=10&by=sales`, {}, "summary tables", "Benchmark Rollup");
-        const rollupElapsed = Math.max(0.8, performance.now() - t0);
-
-        document.getElementById('rollupDuration').textContent = `${rollupElapsed.toFixed(1)} ms`;
-        const speedup = Math.max(1, Math.round(naiveRes.elapsed_ms / rollupElapsed));
-        document.getElementById('speedupBadge').textContent = `${speedup}x FASTER (Zero Tenant DB Load)`;
+        document.getElementById('rollupDuration').textContent = `${res.rollup_median_ms.toFixed(1)} ms`;
+        document.getElementById('rollupRows').textContent = `Summary table read (0 rows scanned in tenant DB)`;
+        document.getElementById('rollupDetails').textContent = `Median of ${res.runs_count} runs \u00b7 warm cache`;
+        document.getElementById('speedupBadge').textContent = `${res.speedup}x FASTER (Reads small summary tables instead of scanning orders)`;
       } catch (err) {
-        console.error("Benchmark failed:", err);
+        document.getElementById('naiveDuration').textContent = 'Error';
+        document.getElementById('rollupDuration').textContent = 'Error';
+        document.getElementById('speedupBadge').textContent = `Benchmark error: ${err.message}`;
       }
-    });
+    }
+
+    const btnRunBenchmark = document.getElementById('btnRunBenchmark');
+    if (btnRunBenchmark) {
+      btnRunBenchmark.addEventListener('click', () => runBenchmark(state.tenantId));
+    }
+    const btnRunBenchmarkBiggest = document.getElementById('btnRunBenchmarkBiggest');
+    if (btnRunBenchmarkBiggest) {
+      btnRunBenchmarkBiggest.addEventListener('click', () => runBenchmark(0));
+    }
+
+    // -------------------------------------------------------------------------
+    // SSE STREAM LISTENER (Task 2)
+    // -------------------------------------------------------------------------
+    let tenantSseSource = null;
+    let sseDebounceTimer = null;
+
+    function setupTenantSse(tenantId) {
+      if (tenantSseSource) {
+        tenantSseSource.close();
+        tenantSseSource = null;
+      }
+
+      const dot = document.getElementById('headerLiveDot');
+      const liveText = document.getElementById('headerLiveText');
+
+      try {
+        const url = `/ui-api/tenants/${tenantId}/stream`;
+        tenantSseSource = new EventSource(url);
+
+        tenantSseSource.onopen = () => {
+          if (dot) dot.className = 'header-live-dot live';
+          if (liveText) liveText.textContent = 'Live';
+        };
+
+        tenantSseSource.onmessage = (e) => {
+          try {
+            const payload = JSON.parse(e.data);
+            if (payload && payload.event === 'order_created' && payload.order_id) {
+              addFeedItem(`${formatISTTimeOnly()} \u00b7 New order #${payload.order_id} \u00b7 $${Number(payload.total || 0).toFixed(2)} \u00b7 delivered (Store ${tenantId})`);
+            }
+          } catch (_) {}
+
+          if (sseDebounceTimer) clearTimeout(sseDebounceTimer);
+          sseDebounceTimer = setTimeout(() => {
+            if (viewTenant.classList.contains('active')) {
+              refreshTenantView();
+            }
+          }, 150);
+        };
+
+        tenantSseSource.onerror = () => {
+          if (dot) dot.className = 'header-live-dot reconnecting';
+          if (liveText) liveText.textContent = 'Reconnecting';
+        };
+      } catch (err) {
+        console.error("SSE connection error:", err);
+      }
+    }
+
+    async function checkDemoMode() {
+      try {
+        const res = await inspectedFetch('/ui-api/demo/status', {}, "summary tables", "Check Demo");
+        if (res && res.demo_mode) {
+          const card = document.getElementById('tenantDemoControlsCard');
+          if (card) card.style.display = 'block';
+          updateStoreCardLabels(state.tenantId);
+        }
+      } catch (_) {}
+    }
 
     // -------------------------------------------------------------------------
     // SCALE TAB LOADER
@@ -2809,6 +3304,8 @@
     tenantSelect.addEventListener('change', (e) => {
       state.tenantId = parseInt(e.target.value, 10);
       document.getElementById('currentStoreName').textContent = `Store ${state.tenantId}`;
+      updateStoreCardLabels(state.tenantId);
+      setupTenantSse(state.tenantId);
       state.lastOrderCount = null;
       state.lastSales = null;
       switchView('tenant');
@@ -2820,7 +3317,8 @@
         document.querySelectorAll('.sub-content').forEach(c => c.style.display = 'none');
         btn.classList.add('active');
         const subId = btn.getAttribute('data-sub');
-        document.getElementById(`adminSub-${subId}`).style.display = 'block';
+        const target = document.getElementById(`adminSub-${subId}`);
+        if (target) target.style.display = 'block';
         if (subId === 'scale') loadScaleTab();
       });
     });
@@ -2860,7 +3358,7 @@
     });
 
     // -------------------------------------------------------------------------
-    // POLLING ENGINE (With Visibility Pause)
+    // POLLING ENGINE (Fallback & Keep-Alive, With Visibility Pause)
     // -------------------------------------------------------------------------
     function startPolling() {
       if (state.pollTimer) clearInterval(state.pollTimer);
@@ -2871,10 +3369,12 @@
         } else if (viewAdmin.classList.contains('active')) {
           refreshAdminView();
         }
-      }, 1000);
+      }, 2000);
     }
 
     refreshTenantView();
+    setupTenantSse(state.tenantId);
+    checkDemoMode();
     startPolling();
   </script>
 </body>

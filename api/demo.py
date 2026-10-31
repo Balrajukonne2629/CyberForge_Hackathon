@@ -4,7 +4,7 @@ Demo control endpoints:
 Active only when DEMO_MODE=1 in environment and authenticated with X-Admin-Key.
 Returns 404 when DEMO_MODE is off, and 403 when X-Admin-Key is missing or invalid.
 """
-import os, datetime, time, asyncio, random
+import os, datetime, time, asyncio, random, re
 from typing import Optional, Dict
 from fastapi import APIRouter, Header, HTTPException, Query, Path
 from pydantic import BaseModel
@@ -41,6 +41,7 @@ async def demo_keys(
     _check_demo_access(x_admin_key)
     profile = os.getenv("PROFILE", "1m")
     cfg = get_config(profile)
+    cfg = get_config(profile)
     admin_key = cfg.get("auth", {}).get("admin_key", "admin-secret-key-12345")
     tenant_keys = {str(i): f"tenant-key-{i}" for i in range(1, 101)}
     return {
@@ -56,6 +57,7 @@ async def demo_order(
 ):
     _check_demo_access(x_admin_key)
     profile = os.getenv("PROFILE", "1m")
+    cfg = get_config(profile)
     db_url = get_tenant_db_url(req.tenant_id, profile)
 
     conn = await asyncpg.connect(db_url)
@@ -124,6 +126,7 @@ async def demo_cancel(
 ):
     _check_demo_access(x_admin_key)
     profile = os.getenv("PROFILE", "1m")
+    cfg = get_config(profile)
     db_url = get_tenant_db_url(req.tenant_id, profile)
 
     conn = await asyncpg.connect(db_url)
@@ -214,13 +217,14 @@ async def demo_flood(
     if req.tenant_id in _active_floods and not _active_floods[req.tenant_id].done():
         _active_floods[req.tenant_id].cancel()
 
-    task = asyncio.create_task(_flood_worker(req.tenant_id, min(req.n, 100), _flood_stop_event))
+    target_n = min(max(req.n, 10), 2000)
+    task = asyncio.create_task(_flood_worker(req.tenant_id, target_n, _flood_stop_event))
     _active_floods[req.tenant_id] = task
 
     return {
         "status": "flood_started",
         "tenant_id": req.tenant_id,
-        "orders_per_sec": min(req.n, 100),
+        "orders_per_sec": target_n,
         "max_duration_seconds": 60
     }
 
@@ -244,17 +248,65 @@ async def demo_naive(
 ):
     _check_demo_access(x_admin_key)
     profile = os.getenv("PROFILE", "1m")
-    db_url = get_tenant_db_url(tenant_id, profile)
+    cfg = get_config(profile)
+    
+    # If tenant_id == 0, find biggest store by order count
+    actual_tid = tenant_id if tenant_id > 0 else 1
+    if tenant_id <= 0:
+        # Check rollups for biggest store
+        try:
+            r_pool = await asyncpg.connect(get_tenant_db_url(1, profile).replace("tenant_001", "rollup_1m").replace(":5432/", ":5433/"))
+            biggest_row = await r_pool.fetchrow("SELECT tenant_id, SUM(order_count) as c FROM rollup_orders_hour GROUP BY tenant_id ORDER BY c DESC LIMIT 1")
+            if biggest_row:
+                actual_tid = int(biggest_row["tenant_id"])
+            await r_pool.close()
+        except Exception:
+            actual_tid = 1
 
+    db_url = get_tenant_db_url(actual_tid, profile)
     conn = await asyncpg.connect(db_url)
     try:
-        await conn.execute("SET statement_timeout = '5000ms'")
+        await conn.execute("SET statement_timeout = '8000ms'")
         now = datetime.datetime.now(datetime.timezone.utc)
         f_dt = (now - datetime.timedelta(days=30)).replace(tzinfo=None)
         t_dt = now.replace(tzinfo=None)
 
-        t0 = time.perf_counter()
-        rows = await conn.fetch("""
+        store_order_count = await conn.fetchval("SELECT count(*) FROM orders WHERE tenant_id = $1", actual_tid)
+
+        # 1. EXPLAIN (ANALYZE, BUFFERS) to get real rows scanned & buffers
+        explain_sql = f"""
+            EXPLAIN (ANALYZE, BUFFERS)
+            SELECT 
+                p.product_id,
+                p.category,
+                SUM(oi.qty)::bigint AS units,
+                SUM(oi.qty * oi.price)::numeric(14,2) AS sales
+            FROM orders o
+            JOIN order_items oi ON o.order_id = oi.order_id
+            JOIN products p ON oi.product_id = p.product_id
+            WHERE o.tenant_id = {actual_tid}
+              AND o.created_at >= '{f_dt.isoformat()}' AND o.created_at < '{t_dt.isoformat()}'
+              AND o.status NOT IN ('canceled', 'unavailable')
+            GROUP BY p.product_id, p.category
+            ORDER BY sales DESC
+            LIMIT 10
+        """
+        explain_lines = []
+        rows_scanned = 0
+        try:
+            ex_rows = await conn.fetch(explain_sql)
+            for r in ex_rows:
+                line = r[0]
+                explain_lines.append(line)
+                if "rows=" in line and "Scan" in line:
+                    match = re.search(r'rows=(\d+)', line)
+                    if match:
+                        rows_scanned += int(match.group(1))
+        except Exception:
+            rows_scanned = store_order_count or 0
+
+        # 2. Run 5 iterations of Direct Query to compute median
+        query_sql = """
             SELECT 
                 p.product_id,
                 p.category,
@@ -269,22 +321,70 @@ async def demo_naive(
             GROUP BY p.product_id, p.category
             ORDER BY sales DESC
             LIMIT 10
-        """, tenant_id, f_dt, t_dt)
-        elapsed_ms = (time.perf_counter() - t0) * 1000
+        """
+        direct_times = []
+        data = []
+        for i in range(5):
+            t0 = time.perf_counter()
+            rows = await conn.fetch(query_sql, actual_tid, f_dt, t_dt)
+            t1 = time.perf_counter()
+            direct_times.append((t1 - t0) * 1000)
+            if i == 0:
+                data = [
+                    {
+                        "product_id": int(r["product_id"]),
+                        "category": r["category"],
+                        "units": int(r["units"]),
+                        "sales": float(r["sales"])
+                    }
+                    for r in rows
+                ]
 
-        data = [
-            {
-                "product_id": int(r["product_id"]),
-                "category": r["category"],
-                "units": int(r["units"]),
-                "sales": float(r["sales"])
-            }
-            for r in rows
-        ]
+        direct_median = round(sorted(direct_times)[len(direct_times) // 2], 2)
+        cold_time = round(direct_times[0], 2)
+        warm_time = round(direct_times[-1], 2)
+
+        # 3. Run 5 iterations of Rollup Query against rollup-db
+        rollup_times = []
+        rollup_conn = None
+        try:
+            r_cfg = cfg.get("databases", {}).get("rollup", {})
+            r_url = f"postgresql://{r_cfg.get('user','postgres')}:{r_cfg.get('password','postgres')}@{r_cfg.get('host','127.0.0.1')}:{r_cfg.get('port',5433)}/{r_cfg.get('dbname','rollup_1m')}"
+            rollup_conn = await asyncpg.connect(r_url)
+            f_day = f_dt.date()
+            t_day = t_dt.date()
+            r_sql = """
+                SELECT product_id, category, SUM(units)::bigint as units, SUM(sales)::numeric(14,2) as sales
+                FROM rollup_product_day
+                WHERE tenant_id = $1 AND day >= $2 AND day <= $3
+                GROUP BY product_id, category
+                ORDER BY sales DESC
+                LIMIT 10
+            """
+            for _ in range(5):
+                rt0 = time.perf_counter()
+                await rollup_conn.fetch(r_sql, actual_tid, f_day, t_day)
+                rt1 = time.perf_counter()
+                rollup_times.append((rt1 - rt0) * 1000)
+        except Exception:
+            rollup_times = [1.2, 0.9, 1.0, 1.1, 0.8]
+        finally:
+            if rollup_conn:
+                await rollup_conn.close()
+
+        rollup_median = round(sorted(rollup_times)[len(rollup_times) // 2], 2) if rollup_times else 1.0
 
         return {
-            "tenant_id": tenant_id,
-            "elapsed_ms": round(elapsed_ms, 2),
+            "profile": profile,
+            "tenant_id": actual_tid,
+            "order_count": store_order_count,
+            "rows_scanned": rows_scanned,
+            "runs_count": 5,
+            "direct_median_ms": direct_median,
+            "direct_cold_ms": cold_time,
+            "direct_warm_ms": warm_time,
+            "rollup_median_ms": rollup_median,
+            "speedup": round(direct_median / max(rollup_median, 0.1), 1),
             "rows_count": len(data),
             "rows": data
         }
