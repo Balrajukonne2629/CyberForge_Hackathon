@@ -10,7 +10,7 @@
 | **Phase 2.5** | Per-Tenant Database Architecture | **DONE** | Mandatory mentor requirement: 100 separate PostgreSQL databases (`tenant_001` .. `tenant_100`). Multi-source round-robin worker, per-tenant fail-closed, statement triggers inside each DB, 11/11 test suites passing (480/480 golden checks), docs/BENCHMARK.md side-by-side comparison. Git tag `phase2-single-db` preserved. |
 | **Part 1** | Event-Driven Pipeline & Optimizations | **DONE** | Lag definition fixed (`now - oldest_pending_ts`), event-driven worker with `LISTEN outbox` & selectors, deficit round-robin fairness, early trigger filter, SSE push endpoint `/tenants/{id}/stream`. |
 | **Part 1b** | Closing Checks & Empirical Proving | **DONE** | Git worktree separation (`CyberForge-dashboard` isolated), filter anomaly explained (density + no-ops), 500-op random mutation fuzz passes with 0 mismatches, DB safety final 5 repeats verified ((c vs a) +2.2% p95, Great), log byte-size coincidence explained, SSE cross-tenant auth verified. |
-| **Phase 3** | Bonuses | IN PROGRESS | B-3 concurrency throttle (429), B-5 monitor page, B-1/B-2 verification. |
+| **Phase 3** | Bonuses | **DONE** | B-3 concurrency throttle (429 with Retry-After: 1, 50-request flood verified, observer p95 72.65ms < 100ms), B-5 monitor telemetry (/admin/monitor 60s ring buffer & 100 tenant health matrix), B-1/B-2 verification (as_of/lag_seconds + single-tenant rebuild). 15/15 test suites PASS twice at 1M. |
 | **Phase 4** | Standout Features | NOT STARTED | One-command scoreboard, try-to-break-it chaos test, live proof page. |
 | **Phase 5** | Freeze & Delivery | NOT STARTED | Clean-clone validation, README, backup video, demo rehearsal. |
 

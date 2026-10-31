@@ -9,12 +9,13 @@ FastAPI Multi-Tenant Aggregation API (v1.1):
 - /admin/stats reports per-tenant lag, stalled flags, and connection metadata.
 - /admin/rebuild supports single-tenant or full-cluster parallel rebuild.
 """
-import os, datetime, asyncio
+import os, datetime, asyncio, time
+from collections import deque
 from contextlib import asynccontextmanager
 from typing import Optional, Literal, Dict
 from fastapi import FastAPI, Header, HTTPException, Query, Path
 from fastapi.responses import StreamingResponse
-import asyncpg, json
+import asyncpg, json, numpy as np
 
 from config import get_config
 
@@ -22,6 +23,56 @@ profile = os.getenv("PROFILE", "1m")
 cfg = get_config(profile)
 ROLLUP_DB_URL = cfg["database"]["rollup_db_url"]
 ADMIN_KEY = cfg.get("auth", {}).get("admin_key", "admin-secret-key-12345")
+
+# B-3 Concurrency Limit configuration
+PER_TENANT_LIMIT = int(cfg.get("concurrency", {}).get("per_tenant_limit", 8))
+QUEUE_TIMEOUT_SEC = float(cfg.get("concurrency", {}).get("queue_timeout_seconds", 0.0))
+tenant_semaphores: Dict[int, asyncio.Semaphore] = {}
+
+# B-5 Telemetry Ring Buffer (last 60s) and Request Counters
+metrics_ring_buffer = deque(maxlen=20000)
+request_counters = {
+    "total_requests": 0,
+    "count_429": 0
+}
+
+def record_request_metric(endpoint: str, latency_ms: float, is_429: bool = False):
+    now = time.time()
+    request_counters["total_requests"] += 1
+    if is_429:
+        request_counters["count_429"] += 1
+    metrics_ring_buffer.append((now, endpoint, latency_ms))
+
+@asynccontextmanager
+async def tenant_concurrency_guard(tenant_id: int, endpoint: str):
+    if tenant_id not in tenant_semaphores:
+        tenant_semaphores[tenant_id] = asyncio.Semaphore(PER_TENANT_LIMIT)
+    sem = tenant_semaphores[tenant_id]
+
+    t0 = time.perf_counter()
+    acquired = False
+    try:
+        if QUEUE_TIMEOUT_SEC <= 0.0:
+            if sem.locked():
+                raise asyncio.TimeoutError()
+            await sem.acquire()
+        else:
+            await asyncio.wait_for(sem.acquire(), timeout=QUEUE_TIMEOUT_SEC)
+        acquired = True
+    except asyncio.TimeoutError:
+        record_request_metric(endpoint, (time.perf_counter() - t0) * 1000.0, is_429=True)
+        raise HTTPException(
+            status_code=429,
+            detail="Too Many Requests: per-tenant concurrency limit exceeded",
+            headers={"Retry-After": "1"}
+        )
+
+    try:
+        yield
+    finally:
+        if acquired:
+            sem.release()
+        record_request_metric(endpoint, (time.perf_counter() - t0) * 1000.0, is_429=False)
 
 pool: Optional[asyncpg.Pool] = None
 tenant_registry_cache: Dict[int, str] = {}
@@ -37,7 +88,7 @@ async def load_tenant_registry():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global pool
-    pool = await asyncpg.create_pool(ROLLUP_DB_URL, min_size=5, max_size=25)
+    pool = await asyncpg.create_pool(ROLLUP_DB_URL, min_size=20, max_size=50)
     await load_tenant_registry()
     yield
     if pool:
@@ -79,17 +130,24 @@ def verify_admin_auth(x_admin_key: Optional[str]):
     if not x_admin_key or x_admin_key != ADMIN_KEY:
         raise HTTPException(status_code=403, detail="Forbidden: Invalid Admin Key")
 
-async def get_tenant_metadata(tenant_id: int):
+async def get_tenant_metadata(tenant_id: int, conn: Optional[asyncpg.Connection] = None):
     assert pool is not None
     now = datetime.datetime.now(datetime.timezone.utc)
     as_of = now.isoformat()
 
-    async with pool.acquire() as conn:
+    if conn is not None:
         row = await conn.fetchrow("""
             SELECT lag_seconds, stalled, heartbeat, last_batch_at, has_pending, oldest_pending_ts
             FROM worker_state
             WHERE tenant_id = $1
         """, tenant_id)
+    else:
+        async with pool.acquire() as c:
+            row = await c.fetchrow("""
+                SELECT lag_seconds, stalled, heartbeat, last_batch_at, has_pending, oldest_pending_ts
+                FROM worker_state
+                WHERE tenant_id = $1
+            """, tenant_id)
 
     if not row:
         return 0.0, False, as_of
@@ -199,6 +257,90 @@ async def admin_rebuild(
         return {"status": "success", "scope": "all_tenants", "elapsed_seconds": round(elapsed, 2)}
 
 # -----------------------------------------------------------------------------
+# B-5 Admin Monitoring Endpoint
+# -----------------------------------------------------------------------------
+
+@app.get("/admin/monitor")
+async def get_admin_monitor(x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")):
+    verify_admin_auth(x_admin_key)
+    assert pool is not None
+    now_ts = time.time()
+
+    async with pool.acquire() as conn:
+        tenant_rows = await conn.fetch("""
+            SELECT 
+                w.tenant_id, 
+                w.lag_seconds, 
+                w.stalled, 
+                w.cursor_xid::text as cursor_xid, 
+                w.cursor_id,
+                coalesce(q.q_cnt, 0) as quarantine_count
+            FROM worker_state w
+            LEFT JOIN (
+                SELECT tenant_id, count(*) as q_cnt 
+                FROM quarantine 
+                GROUP BY tenant_id
+            ) q ON q.tenant_id = w.tenant_id
+            ORDER BY w.tenant_id
+        """)
+
+        w_row = await conn.fetchrow("""
+            SELECT mode, start_time, last_sweep, last_loop_ms 
+            FROM worker_telemetry 
+            WHERE worker_id = 0
+        """)
+
+    cutoff = now_ts - 60.0
+    recent = [m for m in metrics_ring_buffer if m[0] >= cutoff]
+    endpoint_data = {}
+    for ep in ["/orders/count", "/orders/trend", "/orders/by-status", "/products/top"]:
+        lats = [m[2] for m in recent if m[1] == ep]
+        if lats:
+            endpoint_data[ep] = {
+                "p50_ms": round(float(np.percentile(lats, 50)), 2),
+                "p95_ms": round(float(np.percentile(lats, 95)), 2),
+                "calls_60s": len(lats)
+            }
+        else:
+            endpoint_data[ep] = {"p50_ms": 0.0, "p95_ms": 0.0, "calls_60s": 0}
+
+    if w_row:
+        uptime = max(0.0, round(now_ts - w_row["start_time"].timestamp(), 1))
+        sweep_age = max(0.0, round(now_ts - w_row["last_sweep"].timestamp(), 2))
+        loop_ms = float(w_row["last_loop_ms"] or 0.0)
+        mode = w_row["mode"]
+    else:
+        uptime = 0.0
+        sweep_age = 0.0
+        loop_ms = 0.0
+        mode = cfg.get("worker", {}).get("mode", "event")
+
+    return {
+        "tenants": [
+            {
+                "tenant_id": r["tenant_id"],
+                "lag_seconds": float(r["lag_seconds"] or 0.0),
+                "stalled": bool(r["stalled"]),
+                "cursor_xid": r["cursor_xid"],
+                "cursor_id": r["cursor_id"],
+                "quarantine_count": int(r["quarantine_count"])
+            }
+            for r in tenant_rows
+        ],
+        "endpoints": endpoint_data,
+        "worker": {
+            "mode": mode,
+            "uptime_seconds": uptime,
+            "safety_sweep_age_seconds": sweep_age,
+            "loop_time_ms": loop_ms
+        },
+        "requests": {
+            "total_requests": request_counters["total_requests"],
+            "count_429": request_counters["count_429"]
+        }
+    }
+
+# -----------------------------------------------------------------------------
 # Tenant Dashboard Endpoints (Reads ONLY from Rollup DB)
 # -----------------------------------------------------------------------------
 
@@ -210,33 +352,34 @@ async def get_orders_count(
     x_tenant_key: Optional[str] = Header(None, alias="X-Tenant-Key")
 ):
     verify_tenant_auth(tenant_id, x_tenant_key)
-    f_dt = snap_to_hour(from_time, is_end=False)
-    t_dt = snap_to_hour(to_time, is_end=True)
-    lag, stalled, as_of = await get_tenant_metadata(tenant_id)
+    async with tenant_concurrency_guard(tenant_id, "/orders/count"):
+        f_dt = snap_to_hour(from_time, is_end=False)
+        t_dt = snap_to_hour(to_time, is_end=True)
 
-    assert pool is not None
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("""
-            SELECT 
-                COALESCE(SUM(order_count), 0)::bigint AS order_count,
-                COALESCE(SUM(revenue), 0.00)::numeric(14,2) AS total_sales
-            FROM rollup_orders_hour
-            WHERE tenant_id = $1 AND hour >= $2 AND hour < $3
-        """, tenant_id, f_dt, t_dt)
+        assert pool is not None
+        async with pool.acquire() as conn:
+            lag, stalled, as_of = await get_tenant_metadata(tenant_id, conn=conn)
+            row = await conn.fetchrow("""
+                SELECT 
+                    COALESCE(SUM(order_count), 0)::bigint AS order_count,
+                    COALESCE(SUM(revenue), 0.00)::numeric(14,2) AS total_sales
+                FROM rollup_orders_hour
+                WHERE tenant_id = $1 AND hour >= $2 AND hour < $3
+            """, tenant_id, f_dt, t_dt)
 
-    return {
-        "data": {
-            "order_count": int(row["order_count"]),
-            "total_sales": float(row["total_sales"])
-        },
-        "range": {
-            "from": f_dt.isoformat() + "Z",
-            "to": t_dt.isoformat() + "Z"
-        },
-        "as_of": as_of,
-        "lag_seconds": lag,
-        "worker_stalled": stalled
-    }
+        return {
+            "data": {
+                "order_count": int(row["order_count"]),
+                "total_sales": float(row["total_sales"])
+            },
+            "range": {
+                "from": f_dt.isoformat() + "Z",
+                "to": t_dt.isoformat() + "Z"
+            },
+            "as_of": as_of,
+            "lag_seconds": lag,
+            "worker_stalled": stalled
+        }
 
 @app.get("/tenants/{tenant_id}/orders/trend")
 async def get_orders_trend(
@@ -247,59 +390,60 @@ async def get_orders_trend(
     x_tenant_key: Optional[str] = Header(None, alias="X-Tenant-Key")
 ):
     verify_tenant_auth(tenant_id, x_tenant_key)
-    if grain == "hour":
-        f_dt = snap_to_hour(from_time, is_end=False)
-        t_dt = snap_to_hour(to_time, is_end=True)
-        query = """
-            SELECT 
-                hour AS bucket,
-                SUM(order_count)::bigint AS order_count,
-                SUM(revenue)::numeric(14,2) AS sales
-            FROM rollup_orders_hour
-            WHERE tenant_id = $1 AND hour >= $2 AND hour < $3
-            GROUP BY hour
-            HAVING SUM(order_count) > 0
-            ORDER BY hour ASC
-        """
-    else:
-        f_dt = snap_to_day(from_time, is_end=False)
-        t_dt = snap_to_day(to_time, is_end=True)
-        query = """
-            SELECT 
-                DATE_TRUNC('day', hour) AS bucket,
-                SUM(order_count)::bigint AS order_count,
-                SUM(revenue)::numeric(14,2) AS sales
-            FROM rollup_orders_hour
-            WHERE tenant_id = $1 AND hour >= $2 AND hour < $3
-            GROUP BY 1
-            HAVING SUM(order_count) > 0
-            ORDER BY 1 ASC
-        """
+    async with tenant_concurrency_guard(tenant_id, "/orders/trend"):
+        if grain == "hour":
+            f_dt = snap_to_hour(from_time, is_end=False)
+            t_dt = snap_to_hour(to_time, is_end=True)
+            query = """
+                SELECT 
+                    hour AS bucket,
+                    SUM(order_count)::bigint AS order_count,
+                    SUM(revenue)::numeric(14,2) AS sales
+                FROM rollup_orders_hour
+                WHERE tenant_id = $1 AND hour >= $2 AND hour < $3
+                GROUP BY hour
+                HAVING SUM(order_count) > 0
+                ORDER BY hour ASC
+            """
+        else:
+            f_dt = snap_to_day(from_time, is_end=False)
+            t_dt = snap_to_day(to_time, is_end=True)
+            query = """
+                SELECT 
+                    DATE_TRUNC('day', hour) AS bucket,
+                    SUM(order_count)::bigint AS order_count,
+                    SUM(revenue)::numeric(14,2) AS sales
+                FROM rollup_orders_hour
+                WHERE tenant_id = $1 AND hour >= $2 AND hour < $3
+                GROUP BY 1
+                HAVING SUM(order_count) > 0
+                ORDER BY 1 ASC
+            """
 
-    lag, stalled, as_of = await get_tenant_metadata(tenant_id)
-    assert pool is not None
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(query, tenant_id, f_dt, t_dt)
+        assert pool is not None
+        async with pool.acquire() as conn:
+            lag, stalled, as_of = await get_tenant_metadata(tenant_id, conn=conn)
+            rows = await conn.fetch(query, tenant_id, f_dt, t_dt)
 
-    data = [
-        {
-            "bucket": r["bucket"].isoformat() + "Z",
-            "order_count": int(r["order_count"]),
-            "sales": float(r["sales"])
+        data = [
+            {
+                "bucket": r["bucket"].isoformat() + "Z",
+                "order_count": int(r["order_count"]),
+                "sales": float(r["sales"])
+            }
+            for r in rows
+        ]
+
+        return {
+            "data": data,
+            "range": {
+                "from": f_dt.isoformat() + "Z",
+                "to": t_dt.isoformat() + "Z"
+            },
+            "as_of": as_of,
+            "lag_seconds": lag,
+            "worker_stalled": stalled
         }
-        for r in rows
-    ]
-
-    return {
-        "data": data,
-        "range": {
-            "from": f_dt.isoformat() + "Z",
-            "to": t_dt.isoformat() + "Z"
-        },
-        "as_of": as_of,
-        "lag_seconds": lag,
-        "worker_stalled": stalled
-    }
 
 @app.get("/tenants/{tenant_id}/products/top")
 async def get_top_products(
@@ -311,49 +455,49 @@ async def get_top_products(
     x_tenant_key: Optional[str] = Header(None, alias="X-Tenant-Key")
 ):
     verify_tenant_auth(tenant_id, x_tenant_key)
-    f_dt = snap_to_day(from_time, is_end=False)
-    t_dt = snap_to_day(to_time, is_end=True)
-    lag, stalled, as_of = await get_tenant_metadata(tenant_id)
+    async with tenant_concurrency_guard(tenant_id, "/products/top"):
+        f_dt = snap_to_day(from_time, is_end=False)
+        t_dt = snap_to_day(to_time, is_end=True)
+        order_by_col = "sales" if by == "sales" else "units"
+        query = f"""
+            SELECT 
+                product_id,
+                category,
+                SUM(units)::bigint AS units,
+                SUM(sales)::numeric(14,2) AS sales
+            FROM rollup_product_day
+            WHERE tenant_id = $1 AND day >= $2 AND day < $3
+            GROUP BY product_id, category
+            HAVING SUM(units) > 0
+            ORDER BY {order_by_col} DESC
+            LIMIT $4
+        """
 
-    order_by_col = "sales" if by == "sales" else "units"
-    query = f"""
-        SELECT 
-            product_id,
-            category,
-            SUM(units)::bigint AS units,
-            SUM(sales)::numeric(14,2) AS sales
-        FROM rollup_product_day
-        WHERE tenant_id = $1 AND day >= $2 AND day < $3
-        GROUP BY product_id, category
-        HAVING SUM(units) > 0
-        ORDER BY {order_by_col} DESC
-        LIMIT $4
-    """
+        assert pool is not None
+        async with pool.acquire() as conn:
+            lag, stalled, as_of = await get_tenant_metadata(tenant_id, conn=conn)
+            rows = await conn.fetch(query, tenant_id, f_dt, t_dt, n)
 
-    assert pool is not None
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(query, tenant_id, f_dt, t_dt, n)
+        data = [
+            {
+                "product_id": int(r["product_id"]),
+                "category": r["category"],
+                "units": int(r["units"]),
+                "sales": float(r["sales"])
+            }
+            for r in rows
+        ]
 
-    data = [
-        {
-            "product_id": int(r["product_id"]),
-            "category": r["category"],
-            "units": int(r["units"]),
-            "sales": float(r["sales"])
+        return {
+            "data": data,
+            "range": {
+                "from": f_dt.isoformat() + "Z",
+                "to": t_dt.isoformat() + "Z"
+            },
+            "as_of": as_of,
+            "lag_seconds": lag,
+            "worker_stalled": stalled
         }
-        for r in rows
-    ]
-
-    return {
-        "data": data,
-        "range": {
-            "from": f_dt.isoformat() + "Z",
-            "to": t_dt.isoformat() + "Z"
-        },
-        "as_of": as_of,
-        "lag_seconds": lag,
-        "worker_stalled": stalled
-    }
 
 @app.get("/tenants/{tenant_id}/orders/by-status")
 async def get_orders_by_status(
@@ -363,43 +507,44 @@ async def get_orders_by_status(
     x_tenant_key: Optional[str] = Header(None, alias="X-Tenant-Key")
 ):
     verify_tenant_auth(tenant_id, x_tenant_key)
-    f_dt = snap_to_hour(from_time, is_end=False)
-    t_dt = snap_to_hour(to_time, is_end=True)
-    lag, stalled, as_of = await get_tenant_metadata(tenant_id)
+    async with tenant_concurrency_guard(tenant_id, "/orders/by-status"):
+        f_dt = snap_to_hour(from_time, is_end=False)
+        t_dt = snap_to_hour(to_time, is_end=True)
 
-    assert pool is not None
-    async with pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT 
-                status,
-                SUM(order_count)::bigint AS order_count,
-                SUM(revenue)::numeric(14,2) AS sales
-            FROM rollup_orders_hour
-            WHERE tenant_id = $1 AND hour >= $2 AND hour < $3
-            GROUP BY status
-            HAVING SUM(order_count) > 0
-            ORDER BY order_count DESC
-        """, tenant_id, f_dt, t_dt)
+        assert pool is not None
+        async with pool.acquire() as conn:
+            lag, stalled, as_of = await get_tenant_metadata(tenant_id, conn=conn)
+            rows = await conn.fetch("""
+                SELECT 
+                    status,
+                    SUM(order_count)::bigint AS order_count,
+                    SUM(revenue)::numeric(14,2) AS sales
+                FROM rollup_orders_hour
+                WHERE tenant_id = $1 AND hour >= $2 AND hour < $3
+                GROUP BY status
+                HAVING SUM(order_count) > 0
+                ORDER BY order_count DESC
+            """, tenant_id, f_dt, t_dt)
 
-    data = [
-        {
-            "status": r["status"],
-            "order_count": int(r["order_count"]),
-            "sales": float(r["sales"])
+        data = [
+            {
+                "status": r["status"],
+                "order_count": int(r["order_count"]),
+                "sales": float(r["sales"])
+            }
+            for r in rows
+        ]
+
+        return {
+            "data": data,
+            "range": {
+                "from": f_dt.isoformat() + "Z",
+                "to": t_dt.isoformat() + "Z"
+            },
+            "as_of": as_of,
+            "lag_seconds": lag,
+            "worker_stalled": stalled
         }
-        for r in rows
-    ]
-
-    return {
-        "data": data,
-        "range": {
-            "from": f_dt.isoformat() + "Z",
-            "to": t_dt.isoformat() + "Z"
-        },
-        "as_of": as_of,
-        "lag_seconds": lag,
-        "worker_stalled": stalled
-    }
 
 @app.get("/tenants/{tenant_id}/stream")
 async def stream_tenant_updates(

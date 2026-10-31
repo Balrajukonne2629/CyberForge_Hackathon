@@ -49,22 +49,25 @@ def run_sse_push_test(profile: str = "1m", probes: int = 50):
     stop_stream = threading.Event()
 
     def sse_listener():
-        with httpx.Client(base_url=api_url, timeout=60.0) as client:
-            with client.stream("GET", f"/tenants/{tid}/stream", headers={"X-Tenant-Key": valid_key}) as response:
-                assert response.status_code == 200
-                stream_ready.set()
-                buffer = ""
-                for line in response.iter_lines():
-                    if stop_stream.is_set():
-                        break
-                    if line.startswith("data: "):
-                        t_received = time.perf_counter()
-                        data_str = line[6:].strip()
-                        try:
-                            payload = json.loads(data_str)
-                            received_events.append((t_received, payload))
-                        except Exception:
-                            pass
+        try:
+            with httpx.Client(base_url=api_url, timeout=60.0) as client:
+                with client.stream("GET", f"/tenants/{tid}/stream", headers={"X-Tenant-Key": valid_key}) as response:
+                    assert response.status_code == 200
+                    stream_ready.set()
+                    buffer = ""
+                    for line in response.iter_lines():
+                        if stop_stream.is_set():
+                            break
+                        if line.startswith("data: "):
+                            t_received = time.perf_counter()
+                            data_str = line[6:].strip()
+                            try:
+                                payload = json.loads(data_str)
+                                received_events.append((t_received, payload))
+                            except Exception:
+                                pass
+        except Exception:
+            pass
 
     listener_thread = threading.Thread(target=sse_listener, daemon=True)
     listener_thread.start()
@@ -119,6 +122,9 @@ def run_sse_push_test(profile: str = "1m", probes: int = 50):
     stop_stream.set()
     t_cur.close()
     t_conn.close()
+
+    stop_stream.set()
+    listener_thread.join(timeout=1.0)
 
     p50 = float(np.percentile(latencies_ms, 50))
     p95 = float(np.percentile(latencies_ms, 95))

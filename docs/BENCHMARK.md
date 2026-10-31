@@ -201,3 +201,46 @@ Since the covering index achieved **53.03 ms p95** on Tenant 1 at 10M (comfortab
 | **Rollup Metadata (`worker_state` + `quarantine`)** | 0.2 MB | 0.1 MB |
 | **Total Rollup DB Storage** | **268.2 MB** | **1,282.1 MB** |
 | **Rollup Storage Ratio** | 19.9% | 33.5% |
+
+---
+
+## 7. Phase 3 Verification: Bonus Capabilities (B-1, B-2, B-3, B-5)
+
+### 7.1 B-3: Per-Tenant Concurrency Limit & Flood Isolation
+- **Configuration (`config.yaml`)**:
+  - `concurrency.per_tenant_limit: 8` (asyncio Semaphore per tenant)
+  - `concurrency.queue_timeout_seconds: 0.0` (immediate 429 when capacity saturated)
+  - Throttled response: `429 Too Many Requests` with header `Retry-After: 1`
+  - Exempt endpoints: `/admin/*`, `/health`, and `/stream`
+- **Flood Test Results (50 Concurrent Requests on Tenant 1)**:
+  - 200 OK Responses: `8 / 50` (16.0%)
+  - 429 Throttled Responses: `42 / 50` (84.0%)
+  - `Retry-After: 1` verified on 100% of throttled responses
+- **Tenant Isolation Under Flood (Observer Tenant 2)**:
+  - 200 OK Responses: `25 / 25` (100.0%)
+  - 429 Throttled: `0 / 25` (0% throttled)
+  - Latency p50: **`11.43 ms`**
+  - Latency p95: **`72.65 ms`** (Target: < 100 ms)
+  - Serving Integrity: 0 dropped, corrupted, or erroneous records.
+
+### 7.2 B-5: Operational Telemetry Monitoring (`GET /admin/monitor`)
+- **Authentication & Security**: Secured with `X-Admin-Key` (returns `403 Forbidden` for missing or invalid keys).
+- **Per-Tenant Health Matrix**: Returns state across all 100 tenants:
+  - `lag_seconds`: Seconds since oldest pending outbox row enqueue time (0.0s when caught up).
+  - `stalled`: Boolean error flag isolating failed tenants.
+  - `cursor_xid` / `cursor_id`: Source-of-truth progress cursor in outbox.
+  - `quarantine_count`: Malformed events isolated in quarantine table.
+- **In-Memory 60-Second Sliding Ring Buffer**:
+  - Tracks per-endpoint p50/p95 latency and request count for `/orders/count`, `/orders/trend`, `/orders/by-status`, `/products/top`.
+  - Server-side execution latency: p50 = `0.01 ms`, p95 = `55.65 ms`.
+- **Worker Telemetry & Counters**:
+  - Reports worker mode (`event`), continuous uptime, safety sweep age, last loop execution time (`~389 ms`), total requests processed, and total 429s throttled.
+- **Documentation**: Fully documented in `docs/DASHBOARD_API.md` with complete JSON response schema.
+
+### 7.3 B-1 & B-2: Metadata Verification & Single-Tenant Rebuild
+- **B-1 (`as_of` and `lag_seconds`)**: Verified present in every response across all 4 query endpoints and push stream.
+- **B-2 (Targeted Single-Tenant Rebuild `POST /admin/rebuild?tenant_id=N`)**:
+  - Reconstructs rollups for a single tenant from raw DB under a `REPEATABLE READ` snapshot.
+  - Leaves all other 99 tenants untouched.
+  - Automatically resets `worker_state.stalled = false` and advances progress cursor to snapshot upper bound.
+  - Operational runbook documented in `docs/RUNBOOK.md`.

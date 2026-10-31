@@ -136,3 +136,7 @@ rollups:
 auth:
   admin_key: "admin-secret-key-12345"
   key_prefix: "tenant-key-"
+
+concurrency:
+  per_tenant_limit: 8
+  queue_timeout_seconds: 0.0

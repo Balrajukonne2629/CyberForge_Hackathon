@@ -23,6 +23,7 @@ from tests.integrity_tripwire import verify_integrity_tripwire
 from tests.sync import wait_for_worker
 from tests.test_lost_notification import test_lost_notification
 from tests.test_sse_push import run_sse_push_test
+from tests.test_concurrency_and_monitor import run_concurrency_and_monitor_tests
 from config import get_config
 
 def reset_all_worker_state(rollup_url: str):
@@ -68,7 +69,7 @@ def run_all(profile: str):
     api_port = os.getenv("API_PORT", "8000")
     api_url = f"http://127.0.0.1:{api_port}"
     print(f"Starting FastAPI server on port {api_port} (profile: {profile})...")
-    p_api = subprocess.Popen([sys.executable, "-m", "uvicorn", "api.main:app", "--port", str(api_port)], env=dict(os.environ, PROFILE=profile))
+    p_api = subprocess.Popen([sys.executable, "-m", "uvicorn", "api.main:app", "--port", str(api_port), "--no-access-log"], env=dict(os.environ, PROFILE=profile))
     wait_for_api_ready(api_url)
 
     # 3. Start unified runner worker daemon
@@ -106,6 +107,7 @@ def run_all(profile: str):
         ("11. Golden Ground-Truth Parity vs Tenant DBs", lambda: (wait_for_worker(profile) is None and run_golden_check(profile)), False),
         ("12. Event-Driven Lost-Notification Recovery", lambda: test_lost_notification(), True),
         ("13. Push SSE Stream Latency", lambda: run_sse_push_test(profile, probes=20), False),
+        ("14. Concurrency Limit & Admin Monitor", lambda: run_concurrency_and_monitor_tests(), False),
     ]
 
     results = []
@@ -153,9 +155,9 @@ def run_all(profile: str):
     tripwire_ok = verify_integrity_tripwire(profile, fail_fast=False)
     if not tripwire_ok:
         failed = True
-        results.append(("14. Dataset Integrity Tripwire", "FAIL", 0.0))
+        results.append(("15. Dataset Integrity Tripwire", "FAIL", 0.0))
     else:
-        results.append(("14. Dataset Integrity Tripwire", "PASS", 0.0))
+        results.append(("15. Dataset Integrity Tripwire", "PASS", 0.0))
 
     print("\n" + "=" * 70)
     print(f"TEST SUITE SUMMARY ({profile.upper()}):")

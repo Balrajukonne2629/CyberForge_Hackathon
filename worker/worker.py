@@ -68,6 +68,23 @@ class MultiTenantWorker:
         self.dirty_tenants: Set[int] = set(self.owned_tenants)  # Initial safety sweep on startup
 
         self.selector = selectors.DefaultSelector()
+        self.start_time = time.time()
+        self.last_sweep_time = time.time()
+        self.last_loop_ms = 0.0
+
+        # Create worker_telemetry table in rollup-db
+        self.r_cur.execute("""
+            CREATE TABLE IF NOT EXISTS worker_telemetry (
+                worker_id int PRIMARY KEY,
+                mode text NOT NULL,
+                start_time timestamp NOT NULL,
+                last_sweep timestamp NOT NULL,
+                last_loop_ms numeric(10,2) NOT NULL DEFAULT 0.0,
+                updated_at timestamp NOT NULL DEFAULT clock_timestamp()
+            );
+        """)
+        self.r_conn.commit()
+
         self._connect_all_tenants()
 
     def _connect_all_tenants(self):
@@ -439,6 +456,16 @@ class MultiTenantWorker:
                                        ELSE 0.0 END
                 WHERE tenant_id = ANY(%s) AND NOT stalled
             """, (self.owned_tenants,))
+
+            self.r_cur.execute("""
+                INSERT INTO worker_telemetry (worker_id, mode, start_time, last_sweep, last_loop_ms, updated_at)
+                VALUES (%s, %s, to_timestamp(%s), to_timestamp(%s), %s, clock_timestamp())
+                ON CONFLICT (worker_id) DO UPDATE SET
+                    mode = EXCLUDED.mode,
+                    last_sweep = EXCLUDED.last_sweep,
+                    last_loop_ms = EXCLUDED.last_loop_ms,
+                    updated_at = EXCLUDED.updated_at
+            """, (self.worker_id, self.mode, self.start_time, self.last_sweep_time, self.last_loop_ms))
             self.r_conn.commit()
         except Exception:
             self.r_conn.rollback()
@@ -457,6 +484,7 @@ class MultiTenantWorker:
                         if tid not in self.stalled_tenants:
                             self.dirty_tenants.add(tid)
                     last_sweep = now
+                    self.last_sweep_time = now
 
                 if now - last_hb >= 2.0:
                     self.update_idle_heartbeats()
@@ -469,10 +497,12 @@ class MultiTenantWorker:
                         self.poll_notifications(wait_time)
 
                     if self.dirty_tenants:
-                        self.run_one_cycle()
+                        res = self.run_one_cycle()
+                        self.last_loop_ms = round(res["duration"] * 1000.0, 2)
                 else:
                     # Poll mode
                     res = self.run_one_cycle()
+                    self.last_loop_ms = round(res["duration"] * 1000.0, 2)
                     if res["active_tenants"] == 0:
                         time.sleep(self.poll_interval)
 
