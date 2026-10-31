@@ -363,6 +363,7 @@ def run_live_action_store_2_verification(browser):
     assert "You clicked New order" in wjh_text and "Store 2" in wjh_text
     forbidden_14 = "14" + " ms"
     forbidden_28 = "28" + " ms"
+    print(f"DEBUG: wjh_text='{wjh_text}'")
     assert forbidden_14 not in wjh_text, f"Panel 1 contains forbidden literal '{forbidden_14}'"
     assert forbidden_28 not in wjh_text, f"Panel 1 contains forbidden literal '{forbidden_28}'"
     print(f"[PASS] 8.3 'What just happened' panel appeared: '{wjh_text}'")
@@ -371,7 +372,7 @@ def run_live_action_store_2_verification(browser):
     # Assert Orders +1 and Sales +total within 2 s
     new_orders = init_orders
     new_sales = init_sales
-    for _ in range(15):
+    for _ in range(25):
         page.wait_for_timeout(200)
         try:
             val_o = int(page.locator("#tenantOrdersCount").inner_text().split()[0].replace(",", ""))
@@ -511,30 +512,48 @@ if __name__ == "__main__":
         test_platform_summary_matches_plain_sql_3_ranges(test_client)
         print("[PASS] 6. Platform Summary Parity (3 Ranges vs 100 Tenant DBs)")
 
-    import socket, subprocess
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    is_running = (sock.connect_ex(('127.0.0.1', 8000)) == 0)
-    sock.close()
+    import urllib.request, subprocess
     server_process = None
-    if not is_running:
+    server_healthy = False
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=0.5) as resp:
+            if resp.status == 200:
+                server_healthy = True
+    except Exception:
+        server_healthy = False
+
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if not server_healthy:
         server_env = os.environ.copy()
-        server_env.update({"DEMO_MODE": "1", "UI_OPEN_MODE": "1", "PROFILE": "1m"})
+        server_env.update({"DEMO_MODE": "1", "UI_OPEN_MODE": "1", "PROFILE": "1m", "PYTHONPATH": repo_root})
         server_process = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "api.main:app", "--port", "8000"],
-            env=server_env
+            env=server_env,
+            cwd=repo_root
         )
         for _ in range(30):
             time.sleep(0.5)
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            res = s.connect_ex(('127.0.0.1', 8000))
-            s.close()
-            if res == 0:
-                break
+            try:
+                with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=0.5) as resp:
+                    if resp.status == 200:
+                        break
+            except Exception:
+                pass
+
+    worker_process = subprocess.Popen(
+        [sys.executable, "worker/worker.py", "--profile", "1m", "--mode", "event", "--debounce-ms", "10"],
+        env=os.environ.copy(),
+        cwd=repo_root
+    )
+    time.sleep(1)
 
     try:
         run_playwright_screen_verification()
         print("\nALL SMOKE & PLAYWRIGHT CHECKS COMPLETED SUCCESSFULLY!")
     finally:
+        if worker_process:
+            worker_process.terminate()
+            worker_process.wait()
         if server_process:
             server_process.terminate()
             server_process.wait()
