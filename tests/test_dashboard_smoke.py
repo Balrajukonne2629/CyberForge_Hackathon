@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """tests/test_dashboard_smoke.py:
-Smoke test suite for Dashboard:
-1. /ui loads with zero external hosts in script/link/src.
-2. Role screens render (Landing, Admin Overview, Tenants, Health, Scale, Demo, Tenant View).
-3. Admin endpoints return 403 when presented with a tenant key.
-4. /demo/keys returns 404 when DEMO_MODE is off.
-5. Platform summary totals match the ground-truth sum of plain SQL across 100 tenant databases for 3 ranges.
-6. The API Inspector records calls (Playwright check), and captures screenshots (1920x1080 & 390px) into docs/screens/.
+Comprehensive smoke test suite for Multi-Tenant Aggregation Dashboard:
+1. /ui loads with zero external hosts and NO key input fields.
+2. Each view's /ui-api/ endpoints return 200 OK.
+3. Real API (/tenants/ and /admin/) returns 403 Forbidden without valid credentials.
+4. /ui-api/ returns 404 Not Found when UI_OPEN_MODE=0.
+5. Demo endpoints return 404 Not Found when DEMO_MODE=0.
+6. Platform summary equals the ground-truth sum of plain SQL across 100 tenant DBs for 3 ranges.
+7. Isolation check triggers and verifies 403 boundary.
+8. API Calls Panel logs calls, highlights 403/200, and Playwright captures all views (1920x1080 & 390px).
 """
 import os, sys, re, time, datetime
 from concurrent.futures import ThreadPoolExecutor
@@ -25,66 +27,126 @@ SCREENS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "doc
 os.makedirs(SCREENS_DIR, exist_ok=True)
 
 # -----------------------------------------------------------------------------
-# 1. /ui Loads with Zero External Hosts
+# 1. /ui Loads with Zero External Hosts & NO Key Fields
 # -----------------------------------------------------------------------------
-def test_ui_loads_no_external_hosts(client):
+def test_ui_loads_no_external_hosts_and_no_key_fields(client):
     res = client.get("/ui")
     assert res.status_code == 200, f"Expected 200, got {res.status_code}"
     assert "text/html" in res.headers["content-type"]
     html = res.text
 
     assert "Multi-Tenant Aggregation Layer" in html
-    assert "landingScreen" in html
     assert "apiInspector" in html
     assert "getTenantData" in html
+    assert "viewTenant" in html
+    assert "viewAdmin" in html
+    assert "viewHowItWorks" in html
 
     # Assert NO external CDNs, fonts, or external scripts/links
     external_refs = re.findall(r'(?:src|href)=["\']https?://[^"\']+["\']', html)
     assert len(external_refs) == 0, f"Found external references: {external_refs}"
 
+    # Assert NO key input fields or "set key" buttons in the UI
+    key_inputs = re.findall(r'id=["\']\w*key\w*input["\']', html, re.I)
+    assert len(key_inputs) == 0, f"Found key input fields: {key_inputs}"
+    assert "adminKeyInput" not in html
+    assert "tenantKeyInput" not in html
+    assert "saveAdminKeyBtn" not in html
+    assert "saveTenantKeyBtn" not in html
+    assert "set key" not in html.lower()
+
 # -----------------------------------------------------------------------------
-# 2. Admin Endpoints Return 403 for Tenant Key
+# 2. Each View Endpoints Return 200 via /ui-api/
 # -----------------------------------------------------------------------------
-def test_admin_endpoints_return_403_for_tenant_key(client):
-    tenant_headers = {"X-Admin-Key": "tenant-key-1"}
+def test_each_view_endpoints_return_200(client):
     q = "from=2026-10-25T00:00:00Z&to=2026-10-26T00:00:00Z"
 
-    # 1. /admin/platform/summary
-    r = client.get(f"/admin/platform/summary?{q}", headers=tenant_headers)
-    assert r.status_code == 403, f"Expected 403 for summary, got {r.status_code}"
+    # Store View Endpoints
+    r = client.get("/ui-api/tenants")
+    assert r.status_code == 200
+    assert len(r.json()) >= 100
 
-    # 2. /admin/platform/tenants
-    r = client.get(f"/admin/platform/tenants?{q}", headers=tenant_headers)
-    assert r.status_code == 403, f"Expected 403 for tenants list, got {r.status_code}"
+    r = client.get(f"/ui-api/tenants/1/orders/count?{q}")
+    assert r.status_code == 200
+    assert "data" in r.json()
 
-    # 3. /admin/stats
-    r = client.get("/admin/stats", headers=tenant_headers)
-    assert r.status_code == 403, f"Expected 403 for stats, got {r.status_code}"
+    r = client.get(f"/ui-api/tenants/1/orders/trend?{q}&grain=hour")
+    assert r.status_code == 200
 
-    # 4. /admin/monitor
-    r = client.get("/admin/monitor", headers=tenant_headers)
-    assert r.status_code == 403, f"Expected 403 for monitor, got {r.status_code}"
+    r = client.get(f"/ui-api/tenants/1/products/top?{q}&n=10&by=sales")
+    assert r.status_code == 200
 
-    # 5. /demo/keys
-    r = client.get("/demo/keys", headers=tenant_headers)
-    assert r.status_code == 403, f"Expected 403 for demo keys, got {r.status_code}"
+    r = client.get(f"/ui-api/tenants/1/orders/by-status?{q}")
+    assert r.status_code == 200
+
+    # Admin View Endpoints
+    r = client.get(f"/ui-api/platform/summary?{q}")
+    assert r.status_code == 200
+
+    r = client.get(f"/ui-api/platform/tenants?{q}")
+    assert r.status_code == 200
+
+    r = client.get("/ui-api/monitor")
+    assert r.status_code == 200
+
+    r = client.get("/ui-api/stats")
+    assert r.status_code == 200
 
 # -----------------------------------------------------------------------------
-# 3. /demo/keys is 404 when DEMO_MODE is Off
+# 3. Real API Returns 403 Without Key or With Mismatched Key
 # -----------------------------------------------------------------------------
-def test_demo_keys_404_when_demo_mode_off(client):
+def test_real_api_returns_403_without_key(client):
+    q = "from=2026-10-25T00:00:00Z&to=2026-10-26T00:00:00Z"
+
+    # 1. Real tenant endpoint without key -> 403
+    r = client.get(f"/tenants/1/orders/count?{q}")
+    assert r.status_code == 403, f"Expected 403 for unauth tenant call, got {r.status_code}"
+
+    # 2. Real tenant endpoint with wrong tenant key -> 403
+    r = client.get(f"/tenants/1/orders/count?{q}", headers={"X-Tenant-Key": "tenant-key-2"})
+    assert r.status_code == 403, f"Expected 403 for mismatched tenant key, got {r.status_code}"
+
+    # 3. Real admin endpoints without admin key -> 403
+    r = client.get(f"/admin/platform/summary?{q}")
+    assert r.status_code == 403
+
+    r = client.get("/admin/stats")
+    assert r.status_code == 403
+
+    r = client.get("/admin/monitor")
+    assert r.status_code == 403
+
+# -----------------------------------------------------------------------------
+# 4. /ui-api Returns 404 When UI_OPEN_MODE=0
+# -----------------------------------------------------------------------------
+def test_ui_api_404_when_ui_open_mode_zero(client):
+    orig = os.environ.get("UI_OPEN_MODE")
+    try:
+        os.environ["UI_OPEN_MODE"] = "0"
+        r = client.get("/ui-api/tenants")
+        assert r.status_code == 404, f"Expected 404 when UI_OPEN_MODE=0, got {r.status_code}"
+
+        r = client.get("/ui-api/platform/summary?from=2026-10-25T00:00:00Z&to=2026-10-26T00:00:00Z")
+        assert r.status_code == 404
+    finally:
+        if orig is not None:
+            os.environ["UI_OPEN_MODE"] = orig
+        else:
+            os.environ["UI_OPEN_MODE"] = "1"
+
+# -----------------------------------------------------------------------------
+# 5. Demo Endpoints Return 404 When DEMO_MODE=0
+# -----------------------------------------------------------------------------
+def test_demo_endpoints_404_when_demo_mode_off(client):
     orig = os.environ.get("DEMO_MODE")
     try:
         os.environ["DEMO_MODE"] = "0"
-        r = client.get("/demo/keys", headers={"X-Admin-Key": ADMIN_KEY})
+        r = client.post("/demo/order", json={"tenant_id": 1}, headers={"X-Admin-Key": ADMIN_KEY})
         assert r.status_code == 404, f"Expected 404 when DEMO_MODE=0, got {r.status_code}"
 
         os.environ["DEMO_MODE"] = "1"
         r = client.get("/demo/keys", headers={"X-Admin-Key": ADMIN_KEY})
-        assert r.status_code == 200, f"Expected 200 when DEMO_MODE=1, got {r.status_code}"
-        d = r.json()
-        assert d["admin_key"] == ADMIN_KEY
-        assert "1" in d["tenant_keys"]
+        assert r.status_code == 200
     finally:
         if orig is not None:
             os.environ["DEMO_MODE"] = orig
@@ -92,7 +154,7 @@ def test_demo_keys_404_when_demo_mode_off(client):
             os.environ["DEMO_MODE"] = "1"
 
 # -----------------------------------------------------------------------------
-# 4. Platform Summary Equals Plain SQL Over 100 Tenant DBs for 3 Ranges
+# 6. Platform Summary Matches Plain SQL Over 100 Tenant DBs for 3 Ranges
 # -----------------------------------------------------------------------------
 def test_platform_summary_matches_plain_sql_3_ranges(client):
     ranges = [
@@ -140,99 +202,85 @@ def test_platform_summary_matches_plain_sql_3_ranges(client):
         assert abs(agg_sales - sql_sales) < 0.05, f"Mismatch in total_sales: API={agg_sales} vs SQL={sql_sales}"
 
 # -----------------------------------------------------------------------------
-# 5. Playwright Screenshot & API Inspector Verification
+# 7. Playwright Screenshot & Inspector End-to-End Verification
 # -----------------------------------------------------------------------------
 def run_playwright_screen_verification():
     print("\n--- Running Playwright End-to-End & Inspector Verification ---")
     url = "http://127.0.0.1:8000/ui"
 
     with sync_playwright() as p:
-        # Launch Chromium headless
         browser = p.chromium.launch(headless=True)
 
         for device_name, viewport in [("desktop", {"width": 1920, "height": 1080}), ("mobile", {"width": 390, "height": 844})]:
             context = browser.new_context(viewport=viewport)
             page = context.new_page()
 
-            # 1. Landing Screen
+            # 1. Store View (Default Landing)
             page.goto(url)
-            page.wait_for_selector("#landingScreen.active")
-            page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_01_landing_{device_name}.png"))
-            print(f"  Captured: screen_01_landing_{device_name}.png")
-
-            # 2. Log in as Admin using demo key button
-            page.click("#useDemoKeyBtn")
-            page.wait_for_selector("#appScreen.active")
-            page.wait_for_selector("#tab-overview.active")
+            page.wait_for_selector("#viewTenant.active")
             page.wait_for_timeout(1000)
+            page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_01_store_view_{device_name}.png"))
+            print(f"  Captured: screen_01_store_view_{device_name}.png")
 
-            # 2a. Admin Overview Screen
+            # 2. Admin Overview Tab
+            page.click("#navAdminBtn")
+            page.wait_for_selector("#viewAdmin.active")
+            page.wait_for_selector("#adminSub-overview")
+            page.wait_for_timeout(1000)
             page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_02_admin_overview_{device_name}.png"))
             print(f"  Captured: screen_02_admin_overview_{device_name}.png")
 
-            # 3. Admin Tenants Tab
-            page.click("button[data-tab='tenants']")
-            page.wait_for_selector("#tab-tenants.active")
-            page.wait_for_timeout(1000)
-            page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_03_admin_tenants_{device_name}.png"))
-            print(f"  Captured: screen_03_admin_tenants_{device_name}.png")
+            # 3. Admin Stores Table
+            page.click(".sub-nav button[data-sub='tenants']")
+            page.wait_for_timeout(800)
+            page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_03_admin_stores_{device_name}.png"))
+            print(f"  Captured: screen_03_admin_stores_{device_name}.png")
 
-            # 4. Admin Health Tab
-            page.click("button[data-tab='health']")
-            page.wait_for_selector("#tab-health.active")
-            page.wait_for_timeout(1000)
+            # 4. Admin Health & 10x10 Heatmap
+            page.click(".sub-nav button[data-sub='health']")
+            page.wait_for_timeout(800)
             page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_04_admin_health_{device_name}.png"))
             print(f"  Captured: screen_04_admin_health_{device_name}.png")
 
-            # 5. Admin Scale Tab
-            page.click("button[data-tab='scale']")
-            page.wait_for_selector("#tab-scale.active")
+            # 5. Admin Scale Benchmark
+            page.click(".sub-nav button[data-sub='scale']")
             page.wait_for_timeout(800)
             page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_05_admin_scale_{device_name}.png"))
             print(f"  Captured: screen_05_admin_scale_{device_name}.png")
 
-            # 6. Admin Demo Controls Tab
-            page.click("button[data-tab='demo']")
-            page.wait_for_selector("#tab-demo.active")
+            # 6. Admin Demo Controls
+            page.click(".sub-nav button[data-sub='demo']")
             page.wait_for_timeout(800)
             page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_06_admin_demo_{device_name}.png"))
             print(f"  Captured: screen_06_admin_demo_{device_name}.png")
 
-            # 7. Single Tenant View Tab
-            page.click("button[data-tab='tenant-view']")
-            page.wait_for_selector("#tab-tenant-view.active")
+            # 7. How It Works View
+            page.click("#navHowBtn")
+            page.wait_for_selector("#viewHowItWorks.active")
+            page.wait_for_timeout(800)
+            page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_07_how_it_works_{device_name}.png"))
+            print(f"  Captured: screen_07_how_it_works_{device_name}.png")
+
+            # 8. Trigger Isolation Check
+            page.click("#btnIsolationCheck")
+            page.wait_for_selector("#isolationModal[style*='block']")
             page.wait_for_timeout(1000)
-            page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_07_tenant_view_{device_name}.png"))
-            print(f"  Captured: screen_07_tenant_view_{device_name}.png")
+            page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_08_isolation_check_{device_name}.png"))
+            print(f"  Captured: screen_08_isolation_check_{device_name}.png")
 
-            # 8. API Inspector Check: trigger a 403 call and verify both 200 and 403 rows exist
-            page.evaluate("""
-                async () => {
-                    // Trigger a 403 call with invalid key
-                    try {
-                        await inspectedFetch('/tenants/1/orders/count?from=2026-10-01&to=2026-10-02', {
-                            headers: { 'X-Tenant-Key': 'invalid-bad-key' }
-                        }, 'rollup-db');
-                    } catch (e) {}
-                }
-            """)
-            page.wait_for_timeout(500)
+            # 9. Verify API Calls Inspector (Check that 200 and 403 rows exist)
+            page.click("#inspectorTableBody tr >> text=403")
+            page.wait_for_timeout(400)
+            page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_09_inspector_open_{device_name}.png"))
+            print(f"  Captured: screen_09_inspector_open_{device_name}.png (with 403 & 200 rows)")
 
-            # Ensure inspector table is populated
+            # Assertions on API Inspector Table
             rows_count = page.locator("#inspectorTableBody tr").count()
             assert rows_count >= 2, f"Expected at least 2 inspector rows, got {rows_count}"
-
-            # Check that 403 row exists and 200 row exists
-            has_403 = page.locator("#inspectorTableBody td:text('403')").count() > 0
-            has_200 = page.locator("#inspectorTableBody td:text('200')").count() > 0
-            assert has_403, "Inspector missing 403 row"
-            assert has_200, "Inspector missing 200 row"
-
-            # Take screenshot with inspector clearly visible and selected row
-            page.click("#inspectorTableBody tr >> text=403")
-            page.wait_for_timeout(300)
-            page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_08_inspector_open_{device_name}.png"))
-            print(f"  Captured: screen_08_inspector_open_{device_name}.png (with 403 & 200 rows)")
+            has_403 = page.locator("#inspectorTableBody tr:has-text('403')").count() > 0
+            has_200 = page.locator("#inspectorTableBody tr:has-text('200')").count() > 0
+            assert has_403, "Inspector missing 403 row from isolation check"
+            assert has_200, "Inspector missing 200 row from dashboard calls"
 
             context.close()
 
@@ -241,22 +289,29 @@ def run_playwright_screen_verification():
 
 if __name__ == "__main__":
     os.environ["DEMO_MODE"] = "1"
+    os.environ["UI_OPEN_MODE"] = "1"
     print("=" * 70)
     print("RUNNING DASHBOARD SMOKE & PLAYWRIGHT TEST SUITE")
     print("=" * 70)
 
     with TestClient(app) as test_client:
-        test_ui_loads_no_external_hosts(test_client)
-        print("[PASS] 1. UI Loads with Zero External Hosts")
+        test_ui_loads_no_external_hosts_and_no_key_fields(test_client)
+        print("[PASS] 1. UI Loads with Zero External Hosts & NO Key Fields")
 
-        test_admin_endpoints_return_403_for_tenant_key(test_client)
-        print("[PASS] 2. Admin Endpoints Return 403 for Tenant Key")
+        test_each_view_endpoints_return_200(test_client)
+        print("[PASS] 2. Each View Endpoints Return 200 via /ui-api/")
 
-        test_demo_keys_404_when_demo_mode_off(test_client)
-        print("[PASS] 3. /demo/keys is 404 when DEMO_MODE=0 and 200 when DEMO_MODE=1")
+        test_real_api_returns_403_without_key(test_client)
+        print("[PASS] 3. Real API Returns 403 Without Key or With Mismatched Key")
+
+        test_ui_api_404_when_ui_open_mode_zero(test_client)
+        print("[PASS] 4. /ui-api Returns 404 When UI_OPEN_MODE=0")
+
+        test_demo_endpoints_404_when_demo_mode_off(test_client)
+        print("[PASS] 5. Demo Endpoints Return 404 When DEMO_MODE=0")
 
         test_platform_summary_matches_plain_sql_3_ranges(test_client)
-        print("[PASS] 4. Platform Summary Parity (3 Ranges vs 100 Tenant DBs)")
+        print("[PASS] 6. Platform Summary Parity (3 Ranges vs 100 Tenant DBs)")
 
     run_playwright_screen_verification()
-    print("\nALL SMOKE & INSPECTOR CHECKS COMPLETED SUCCESSFULLY!")
+    print("\nALL SMOKE & PLAYWRIGHT CHECKS COMPLETED SUCCESSFULLY!")

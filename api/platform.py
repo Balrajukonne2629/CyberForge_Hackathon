@@ -14,9 +14,11 @@ import asyncpg
 
 from config import get_config
 from api.demo import router as demo_router
+from api.ui_proxy import router as ui_proxy_router
 
 router = APIRouter()
 router.include_router(demo_router)
+router.include_router(ui_proxy_router)
 
 from api.main import snap_to_hour, snap_to_day
 
