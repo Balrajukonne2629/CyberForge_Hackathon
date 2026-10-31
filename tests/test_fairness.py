@@ -31,7 +31,7 @@ def run_fairness_test(profile: str = "1m", flood_count: int = 1000) -> bool:
 
     # 1. Flood Tenant 1 outbox
     print(f"1. Injecting burst of {flood_count:,} outbox rows into Tenant {flood_tid}...")
-    t0_flood = time.time()
+    t0_flood = time.perf_counter()
     f_cur.execute("""
         INSERT INTO outbox (kind, tenant_id, bucket_ts, status, delta_count, delta_amount)
         SELECT 
@@ -42,13 +42,17 @@ def run_fairness_test(profile: str = "1m", flood_count: int = 1000) -> bool:
             1, 
             10.00
         FROM generate_series(1, %s)
+        RETURNING id
     """, (fairness_hour, flood_count))
-    print(f"  Injected {flood_count:,} rows into Tenant {flood_tid} in {time.time() - t0_flood:.2f}s")
+    flood_row_ids = [r[0] for r in f_cur.fetchall()]
+    max_flood_outbox_id = max(flood_row_ids)
+    print(f"  Injected {flood_count:,} rows into Tenant {flood_tid} (max outbox id: {max_flood_outbox_id}) in {time.perf_counter() - t0_flood:.2f}s")
 
-    # 2. Concurrently insert 1 order into each observer tenant
-    print("2. Concurrently inserting orders into observer tenants (2, 10, 42)...")
+    # 2. Concurrently insert 1 order into each observer tenant with distinct commit timestamps
+    print("2. Inserting orders into observer tenants (2, 10, 42) with distinct timestamps...")
     observer_oids = {}
     observer_conns = {}
+    commit_times = {}
     test_ts = datetime.datetime(2026, 10, 25, 12, 0, 0)
 
     for otid in observer_tids:
@@ -60,6 +64,10 @@ def run_fairness_test(profile: str = "1m", flood_count: int = 1000) -> bool:
         observer_oids[otid] = oid
         cur.execute("DELETE FROM order_items WHERE order_id = %s", (oid,))
         cur.execute("DELETE FROM orders WHERE order_id = %s", (oid,))
+
+        # Stagger slightly to prove individual timing
+        time.sleep(0.02)
+        t_commit = time.perf_counter()
         cur.execute("""
             INSERT INTO orders (order_id, tenant_id, customer_id, status, total, created_at, updated_at)
             VALUES (%s, %s, 1, 'delivered', 50.00, %s, %s)
@@ -68,69 +76,107 @@ def run_fairness_test(profile: str = "1m", flood_count: int = 1000) -> bool:
             INSERT INTO order_items (item_id, order_id, tenant_id, product_id, qty, price)
             VALUES (%s, %s, %s, 1, 1, 50.00)
         """, (oid, oid, otid))
+        commit_times[otid] = t_commit
         observer_conns[otid] = (c, cur)
 
-    # 3. Measure observer lag and completion time
-    t_start_obs = time.time()
-    print("3. Observing observer tenants' lag while Tenant 1 is clearing flood...")
     r_conn = psycopg2.connect(rollup_url)
     r_conn.autocommit = True
     r_cur = r_conn.cursor()
 
-    observer_latencies = {}
-    while len(observer_latencies) < len(observer_tids) and (time.time() - t_start_obs) < 5.0:
-        r_cur.execute("""
-            SELECT tenant_id, lag_seconds, cursor_id 
-            FROM worker_state 
-            WHERE tenant_id = ANY(%s)
-        """, (observer_tids,))
-        for row in r_cur.fetchall():
-            tid, lag, cur_id = row[0], float(row[1]), row[2]
-            if tid not in observer_latencies and cur_id > 0:
-                elapsed = time.time() - t_start_obs
-                observer_latencies[tid] = (elapsed, lag)
-        time.sleep(0.02)
+    try:
+        # 3. Time each observer tenant separately to its own rollup visibility
+        print("3. Timing observer tenants separately to their own rollup visibility...")
+        observer_results = {}
+        t_poll_start = time.perf_counter()
 
-    # 4. Report numbers
-    print("\nFAIRNESS RESULTS:")
-    for otid in observer_tids:
-        elapsed, lag = observer_latencies.get(otid, (99.0, 99.0))
-        print(f"  Tenant {otid:2d}: Ingested in {elapsed:.3f}s | Worker reported lag: {lag:.2f}s")
-        assert elapsed < 1.0, f"Tenant {otid} was starved! Ingestion took {elapsed:.3f}s >= 1.0s"
-        assert lag < 0.5, f"Tenant {otid} lag too high: {lag:.2f}s"
+        while len(observer_results) < len(observer_tids) and (time.perf_counter() - t_poll_start) < 5.0:
+            for otid in observer_tids:
+                if otid in observer_results:
+                    continue
+                r_cur.execute("""
+                    SELECT order_count FROM rollup_orders_hour 
+                    WHERE tenant_id = %s AND hour = %s AND status = 'delivered'
+                """, (otid, test_ts))
+                res = r_cur.fetchone()
+                if res and res[0] >= 1:
+                    t_visible = time.perf_counter()
+                    latency_sec = t_visible - commit_times[otid]
+                    r_cur.execute("SELECT lag_seconds FROM worker_state WHERE tenant_id = %s", (otid,))
+                    reported_lag = float(r_cur.fetchone()[0] or 0.0)
+                    observer_results[otid] = (latency_sec, reported_lag)
+            time.sleep(0.01)
 
-    # 5. Wait for Tenant 1 to finish clearing
-    print("\n4. Waiting for flooded Tenant 1 to complete ingestion...")
-    wait_for_worker(profile, tenant_id=flood_tid, timeout=15.0)
+        # 4. Report observer tenant timings
+        print("\nOBSERVER TENANT TIMINGS (Individual Commit -> Rollup Visibility):")
+        for otid in observer_tids:
+            latency, reported_lag = observer_results.get(otid, (99.0, 99.0))
+            print(f"  Tenant {otid:2d}: Ingestion latency = {latency*1000:.1f}ms | Worker lag_seconds = {reported_lag:.3f}s")
+            assert latency < 1.0, f"Tenant {otid} was starved! Ingestion took {latency:.3f}s >= 1.0s"
+            assert reported_lag < 0.5, f"Tenant {otid} lag too high: {reported_lag:.3f}s"
 
-    # 6. Compensate Tenant 1 flood rows through outbox cleanly
-    f_cur.execute("""
-        INSERT INTO outbox (kind, tenant_id, bucket_ts, status, delta_count, delta_amount)
-        SELECT 
-            'order', 
-            1, 
-            %s::timestamp, 
-            'delivered', 
-            -1, 
-            -10.00
-        FROM generate_series(1, %s)
-    """, (fairness_hour, flood_count))
-    wait_for_worker(profile, tenant_id=flood_tid, timeout=15.0)
+        # 5. Measure flooded Tenant 1 drain duration and track lag over time
+        print("\n4. Monitoring flooded Tenant 1 draining {0:,} rows and sampling lag over time...".format(flood_count))
+        t_drain_start = time.perf_counter()
+        lag_samples = []
 
-    # Cleanup observer tenant orders
-    for otid, (c, cur) in observer_conns.items():
-        oid = observer_oids[otid]
-        cur.execute("DELETE FROM order_items WHERE order_id = %s", (oid,))
-        cur.execute("DELETE FROM orders WHERE order_id = %s", (oid,))
-        cur.close()
-        c.close()
-    for otid in observer_tids:
-        wait_for_worker(profile, tenant_id=otid, timeout=10.0)
+        while time.perf_counter() - t_drain_start < 15.0:
+            elapsed = time.perf_counter() - t_drain_start
+            r_cur.execute("SELECT cursor_id, lag_seconds, has_pending FROM worker_state WHERE tenant_id = %s", (flood_tid,))
+            w_row = r_cur.fetchone()
+            if w_row:
+                cur_id, lag_val, pending = w_row[0], float(w_row[1] or 0.0), bool(w_row[2])
+                lag_samples.append((round(elapsed, 2), round(lag_val, 3)))
+                if not pending and cur_id >= max_flood_outbox_id:
+                    break
+            time.sleep(0.05)
 
-    f_cur.close()
-    f_conn.close()
-    r_cur.close()
-    r_conn.close()
+        drain_duration = time.perf_counter() - t_drain_start
+        peak_lag = max(s[1] for s in lag_samples) if lag_samples else 0.0
+        print(f"  Flooded Tenant 1 drain completed in {drain_duration:.2f}s (Peak lag: {peak_lag:.2f}s)")
+        print(f"  Tenant 1 lag progression over time: {lag_samples[:8]} ... {lag_samples[-3:]}")
+
+    finally:
+        # 5. Wait for Tenant 1 to finish clearing
+        print("\n4. Waiting for flooded Tenant 1 to complete ingestion...")
+        try:
+            wait_for_worker(profile, tenant_id=flood_tid, timeout=15.0)
+
+            # 6. Compensate Tenant 1 flood rows through outbox cleanly
+            f_cur.execute("""
+                INSERT INTO outbox (kind, tenant_id, bucket_ts, status, delta_count, delta_amount)
+                SELECT 
+                    'order', 
+                    1, 
+                    %s::timestamp, 
+                    'delivered', 
+                    -1, 
+                    -10.00
+                FROM generate_series(1, %s)
+            """, (fairness_hour, flood_count))
+            wait_for_worker(profile, tenant_id=flood_tid, timeout=15.0)
+        except Exception as e:
+            print(f"Cleanup warning for Tenant 1 flood: {e}")
+
+        # Cleanup observer tenant orders
+        for otid, (c, cur) in observer_conns.items():
+            try:
+                oid = observer_oids[otid]
+                cur.execute("DELETE FROM order_items WHERE order_id = %s", (oid,))
+                cur.execute("DELETE FROM orders WHERE order_id = %s", (oid,))
+                cur.close()
+                c.close()
+            except Exception:
+                pass
+        for otid in observer_tids:
+            try:
+                wait_for_worker(profile, tenant_id=otid, timeout=10.0)
+            except Exception:
+                pass
+
+        f_cur.close()
+        f_conn.close()
+        r_cur.close()
+        r_conn.close()
 
     print("\n>>> FAIRNESS & ANTI-STARVATION TEST PASSED 100% <<<")
     return True

@@ -79,75 +79,89 @@ def run_concurrent_multi_tenant_test(profile: str = "1m", tenant_count: int = 25
         results = list(executor.map(lambda t: mutate_single_tenant(t, profile), target_tids))
     print(f"Mutations finished on {len(results)} tenant DBs in {time.time() - t0:.2f}s")
 
-    # Wait for worker catch-up
-    print("Waiting for rollup worker to process all outbox deltas...")
-    for tid, _ in results:
-        wait_for_worker(profile, tenant_id=tid, timeout=15.0)
+    try:
+        # Wait for worker catch-up
+        print("Waiting for rollup worker to process all outbox deltas...")
+        for tid, _ in results:
+            wait_for_worker(profile, tenant_id=tid, timeout=15.0)
 
-    # Verify ground-truth parity for EVERY touched tenant
-    print("Verifying ground-truth parity for all 25 touched tenants against their OWN DBs...")
-    r_conn = psycopg2.connect(rollup_url)
-    r_cur = r_conn.cursor()
+        # Verify ground-truth parity for EVERY touched tenant
+        print("Verifying ground-truth parity for all 25 touched tenants against their OWN DBs...")
+        r_conn = psycopg2.connect(rollup_url)
+        r_cur = r_conn.cursor()
 
-    mismatches = 0
-    for tid, oid in results:
-        t_url = get_tenant_db_url(tid, profile)
-        tc = psycopg2.connect(t_url)
-        tcur = tc.cursor()
+        mismatches = 0
+        for tid, oid in results:
+            t_url = get_tenant_db_url(tid, profile)
+            tc = psycopg2.connect(t_url)
+            tcur = tc.cursor()
 
-        # Check raw orders vs rollup_orders_hour
-        tcur.execute("""
-            SELECT count(*), coalesce(sum(CASE WHEN status NOT IN %s THEN total ELSE 0 END), 0)
-            FROM orders WHERE tenant_id = %s
-        """, (excluded, tid))
-        sql_cnt, sql_rev = tcur.fetchone()
+            # Check raw orders vs rollup_orders_hour
+            tcur.execute("""
+                SELECT count(*), coalesce(sum(CASE WHEN status NOT IN %s THEN total ELSE 0 END), 0)
+                FROM orders WHERE tenant_id = %s
+            """, (excluded, tid))
+            sql_cnt, sql_rev = tcur.fetchone()
 
-        r_cur.execute("""
-            SELECT coalesce(sum(order_count), 0), coalesce(sum(revenue), 0)
-            FROM rollup_orders_hour WHERE tenant_id = %s
-        """, (tid,))
-        r_cnt, r_rev = r_cur.fetchone()
+            r_cur.execute("""
+                SELECT coalesce(sum(order_count), 0), coalesce(sum(revenue), 0)
+                FROM rollup_orders_hour WHERE tenant_id = %s
+            """, (tid,))
+            r_cnt, r_rev = r_cur.fetchone()
 
-        # Check raw items vs rollup_product_day
-        tcur.execute("""
-            SELECT coalesce(sum(oi.qty), 0), coalesce(sum(oi.qty * oi.price), 0)
-            FROM order_items oi JOIN orders o ON o.order_id = oi.order_id
-            WHERE o.status NOT IN %s AND o.tenant_id = %s
-        """, (excluded, tid))
-        sql_units, sql_sales = tcur.fetchone()
+            # Check raw items vs rollup_product_day
+            tcur.execute("""
+                SELECT coalesce(sum(oi.qty), 0), coalesce(sum(oi.qty * oi.price), 0)
+                FROM order_items oi JOIN orders o ON o.order_id = oi.order_id
+                WHERE o.status NOT IN %s AND o.tenant_id = %s
+            """, (excluded, tid))
+            sql_units, sql_sales = tcur.fetchone()
 
-        r_cur.execute("""
-            SELECT coalesce(sum(units), 0), coalesce(sum(sales), 0)
-            FROM rollup_product_day WHERE tenant_id = %s
-        """, (tid,))
-        r_units, r_sales = r_cur.fetchone()
+            r_cur.execute("""
+                SELECT coalesce(sum(units), 0), coalesce(sum(sales), 0)
+                FROM rollup_product_day WHERE tenant_id = %s
+            """, (tid,))
+            r_units, r_sales = r_cur.fetchone()
 
-        cnt_match = (sql_cnt == r_cnt)
-        rev_match = (abs(float(sql_rev) - float(r_rev)) < 0.01)
-        units_match = (sql_units == r_units)
-        sales_match = (abs(float(sql_sales) - float(r_sales)) < 0.01)
+            cnt_match = (sql_cnt == r_cnt)
+            rev_match = (abs(float(sql_rev) - float(r_rev)) < 0.01)
+            units_match = (sql_units == r_units)
+            sales_match = (abs(float(sql_sales) - float(r_sales)) < 0.01)
 
-        if not (cnt_match and rev_match and units_match and sales_match):
-            print(f"[FAIL] Parity mismatch on Tenant {tid}: SQL=({sql_cnt},{sql_rev},{sql_units},{sql_sales}) vs Rollup=({r_cnt},{r_rev},{r_units},{r_sales})")
-            mismatches += 1
+            if not (cnt_match and rev_match and units_match and sales_match):
+                print(f"[FAIL] Parity mismatch on Tenant {tid}: SQL=({sql_cnt},{sql_rev},{sql_units},{sql_sales}) vs Rollup=({r_cnt},{r_rev},{r_units},{r_sales})")
+                mismatches += 1
 
-        # Clean up test order
-        tcur.execute("DELETE FROM order_items WHERE order_id = %s", (oid,))
-        tcur.execute("DELETE FROM orders WHERE order_id = %s", (oid,))
-        tcur.close()
-        tc.close()
+            # Clean up test order
+            tcur.execute("DELETE FROM order_items WHERE order_id = %s", (oid,))
+            tcur.execute("DELETE FROM orders WHERE order_id = %s", (oid,))
+            tcur.close()
+            tc.close()
 
-    r_cur.close()
-    r_conn.close()
+        r_cur.close()
+        r_conn.close()
 
-    # Wait for deletion catch-up
-    for tid in target_tids:
-        wait_for_worker(profile, tenant_id=tid, timeout=10.0)
+        # Wait for deletion catch-up
+        for tid in target_tids:
+            wait_for_worker(profile, tenant_id=tid, timeout=10.0)
 
-    print(f"Concurrent Parity Result: {len(target_tids) - mismatches}/{len(target_tids)} tenants passed (mismatches={mismatches})")
-    assert mismatches == 0, f"Found {mismatches} mismatches after concurrent multi-tenant mutations"
-    print(">>> CONCURRENT MULTI-TENANT TEST PASSED 100% <<<")
-    return True
+        print(f"Concurrent Parity Result: {len(target_tids) - mismatches}/{len(target_tids)} tenants passed (mismatches={mismatches})")
+        assert mismatches == 0, f"Found {mismatches} mismatches after concurrent multi-tenant mutations"
+        print(">>> CONCURRENT MULTI-TENANT TEST PASSED 100% <<<")
+        return True
+    finally:
+        for tid, oid in results:
+            try:
+                t_url = get_tenant_db_url(tid, profile)
+                tc = psycopg2.connect(t_url)
+                tc.autocommit = True
+                tcur = tc.cursor()
+                tcur.execute("DELETE FROM order_items WHERE order_id = %s", (oid,))
+                tcur.execute("DELETE FROM orders WHERE order_id = %s", (oid,))
+                tcur.close()
+                tc.close()
+            except Exception:
+                pass
 
 if __name__ == "__main__":
     prof = sys.argv[1] if len(sys.argv) > 1 else "1m"

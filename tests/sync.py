@@ -66,3 +66,6 @@ def wait_for_worker(
 
     r_cur.close()
     r_conn.close()
+
+    if not all_caught_up:
+        raise TimeoutError(f"wait_for_worker timed out after {timeout}s: states={states}, expected_max={max_ids}")

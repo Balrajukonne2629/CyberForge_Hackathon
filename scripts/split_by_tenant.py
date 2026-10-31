@@ -21,6 +21,57 @@ def terminate_connections(cur, db_name: str):
         WHERE datname = %s AND pid <> pg_backend_pid()
     """, (db_name,))
 
+def verify_split_completeness(profile: str = "1m", tenant_count: int = 100, max_workers: int = 16) -> bool:
+    """Compare row counts across all tenant DBs against source CSV.GZ line counts.
+    Exits non-zero with a clear error on any mismatch.
+    """
+    print(f"\n[SPLIT GUARD] Verifying completeness against source CSVs (Profile: {profile.upper()}) ...")
+    data_dir = "data/mitigata_dataset/small" if profile == "1m" else "data/mitigata_dataset/main"
+    tables = ["orders", "order_items", "customers", "products"]
+
+    expected = {}
+    for tbl in tables:
+        gz_path = os.path.join(data_dir, f"{tbl}.csv.gz")
+        with gzip.open(gz_path, "rt", encoding="utf-8") as gz:
+            expected[tbl] = sum(1 for _ in gz) - 1
+
+    actual = {tbl: 0 for tbl in tables}
+    def count_tenant(tid: int):
+        db_url = get_tenant_db_url(tid, profile)
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+        t_counts = {}
+        for tbl in tables:
+            cur.execute(f"SELECT count(*) FROM {tbl}")
+            t_counts[tbl] = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        return t_counts
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for t_counts in executor.map(count_tenant, range(1, tenant_count + 1)):
+            for tbl, cnt in t_counts.items():
+                actual[tbl] += cnt
+
+    mismatches = []
+    print(f"{'Table':<15} | {'CSV Expected':<15} | {'DB Actual Sum':<15} | Status")
+    print("-" * 55)
+    for tbl in tables:
+        exp = expected[tbl]
+        act = actual[tbl]
+        status = "MATCH" if exp == act else "MISMATCH"
+        print(f"{tbl:<15} | {exp:>12,}    | {act:>12,}    | {status}")
+        if exp != act:
+            mismatches.append(f"{tbl}: expected {exp:,}, got {act:,} (diff={act - exp:,})")
+
+    if mismatches:
+        err_msg = f"[SPLIT GUARD FATAL] Data completeness validation failed for profile '{profile}'!\n  " + "\n  ".join(mismatches)
+        print(f"\n{err_msg}", file=sys.stderr)
+        raise RuntimeError(err_msg)
+
+    print(f"[SPLIT GUARD PASS] All tables verified 100% complete across all {tenant_count} tenant DBs.\n")
+    return True
+
 def split_and_load(profile: str = "1m", tenant_count: int = 100, max_workers: int = 16):
     cfg = get_config(profile)
     t_start = time.time()
@@ -168,6 +219,9 @@ def split_and_load(profile: str = "1m", tenant_count: int = 100, max_workers: in
     # Clean up staging files
     shutil.rmtree(staging_dir, ignore_errors=True)
     print(f"  All tenant DBs loaded and indexed in {time.time() - t0:.2f}s")
+
+    # Run Split Guard completeness verification
+    verify_split_completeness(profile=profile, tenant_count=tenant_count, max_workers=max_workers)
 
     # 5. Populate tenant_registry & worker_state in Rollup DB
     print(f"\n[5/5] Registering tenants in Rollup DB ...")

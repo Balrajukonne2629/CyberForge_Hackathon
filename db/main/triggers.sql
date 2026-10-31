@@ -56,7 +56,7 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION trg_orders_update_stmt()
 RETURNS trigger AS $$
 BEGIN
-    -- Emit -1 for old state and +1 for new state if hour, status, or total changed
+    -- 1. If bucket moved (status or hour changed), emit -1 for old bucket and +1 for new bucket
     INSERT INTO outbox (kind, tenant_id, bucket_ts, status, delta_count, delta_amount)
     SELECT
         'order',
@@ -68,8 +68,7 @@ BEGIN
     FROM old_table o
     JOIN new_table n ON o.order_id = n.order_id
     WHERE o.status IS DISTINCT FROM n.status
-       OR date_trunc('hour', o.created_at) IS DISTINCT FROM date_trunc('hour', n.created_at)
-       OR o.total IS DISTINCT FROM n.total;
+       OR date_trunc('hour', o.created_at) IS DISTINCT FROM date_trunc('hour', n.created_at);
 
     INSERT INTO outbox (kind, tenant_id, bucket_ts, status, delta_count, delta_amount)
     SELECT
@@ -82,8 +81,22 @@ BEGIN
     FROM old_table o
     JOIN new_table n ON o.order_id = n.order_id
     WHERE o.status IS DISTINCT FROM n.status
-       OR date_trunc('hour', o.created_at) IS DISTINCT FROM date_trunc('hour', n.created_at)
-       OR o.total IS DISTINCT FROM n.total;
+       OR date_trunc('hour', o.created_at) IS DISTINCT FROM date_trunc('hour', n.created_at);
+
+    -- 2. If bucket remained identical, but total changed: fold -1/+1 pair into single net delta row
+    INSERT INTO outbox (kind, tenant_id, bucket_ts, status, delta_count, delta_amount)
+    SELECT
+        'order',
+        n.tenant_id,
+        date_trunc('hour', n.created_at),
+        n.status,
+        0,
+        CASE WHEN n.status NOT IN ('canceled', 'unavailable') THEN (n.total - o.total) ELSE 0.00 END
+    FROM old_table o
+    JOIN new_table n ON o.order_id = n.order_id
+    WHERE o.status IS NOT DISTINCT FROM n.status
+      AND date_trunc('hour', o.created_at) IS NOT DISTINCT FROM date_trunc('hour', n.created_at)
+      AND o.total IS DISTINCT FROM n.total;
 
     -- FAN OUT: If order changed from counted -> excluded (e.g. canceled), subtract all its items
     INSERT INTO outbox (kind, tenant_id, bucket_ts, product_id, category, delta_count, delta_amount)

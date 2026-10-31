@@ -18,7 +18,7 @@ import psycopg2
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from config import get_config
-from scripts.split_by_tenant import split_and_load
+from scripts.split_by_tenant import split_and_load, verify_split_completeness
 from scripts.install_triggers import install_triggers
 from scripts.rebuild import rebuild_all
 

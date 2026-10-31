@@ -93,32 +93,53 @@ def run_crash_recovery_test(profile: str = "1m") -> bool:
         for tid in test_tenants:
             wait_for_worker(profile, tenant_id=tid, timeout=15.0)
 
-        # 6. Verify ground truth vs rollup for all 3 tenants
+        # 6. Verify WHOLE-TENANT totals (orders, revenue, units, sales) vs rollup for all 3 tenants
         r_conn = psycopg2.connect(rollup_url)
         r_cur = r_conn.cursor()
-        f_time = "2026-10-28 15:00:00"
-        t_time = "2026-10-28 16:00:00"
+        excluded = tuple(cfg["business_rules"]["excluded_statuses"])
 
-        print("6. Verifying ground-truth match for all 3 tenants:")
+        print("6. Verifying WHOLE-TENANT ground-truth totals for all 3 tenants:")
         for tid in test_tenants:
             cur = t_curs[tid]
+
+            # Whole-tenant orders & revenue
             cur.execute("""
-                SELECT count(*), coalesce(sum(total), 0)
-                FROM orders
-                WHERE tenant_id = %s AND created_at >= %s AND created_at < %s
-                  AND status = 'delivered'
-            """, (tid, f_time, t_time))
-            sql_cnt, sql_rev = cur.fetchone()
+                SELECT count(*), coalesce(sum(CASE WHEN status NOT IN %s THEN total ELSE 0 END), 0)
+                FROM orders WHERE tenant_id = %s
+            """, (excluded, tid))
+            sql_orders, sql_rev = cur.fetchone()
 
             r_cur.execute("""
-                SELECT order_count, revenue FROM rollup_orders_hour
-                WHERE tenant_id = %s AND hour = %s AND status = 'delivered'
-            """, (tid, f_time))
-            r_cnt, r_rev = r_cur.fetchone()
+                SELECT coalesce(sum(order_count), 0), coalesce(sum(revenue), 0) 
+                FROM rollup_orders_hour WHERE tenant_id = %s
+            """, (tid,))
+            r_orders, r_rev = r_cur.fetchone()
 
-            print(f"  Tenant {tid:2d}: SQL=({sql_cnt}, ${float(sql_rev):.2f}) vs Rollup=({r_cnt}, ${float(r_rev):.2f})")
-            assert sql_cnt == r_cnt, f"Tenant {tid} count mismatch: {sql_cnt} != {r_cnt}"
-            assert abs(float(sql_rev) - float(r_rev)) < 0.01, f"Tenant {tid} rev mismatch: {sql_rev} != {r_rev}"
+            # Whole-tenant units & sales
+            cur.execute("""
+                SELECT coalesce(sum(oi.qty), 0), coalesce(sum(oi.qty * oi.price), 0)
+                FROM order_items oi 
+                JOIN orders o ON o.order_id = oi.order_id
+                WHERE o.tenant_id = %s AND o.status NOT IN %s
+            """, (tid, excluded))
+            sql_units, sql_sales = cur.fetchone()
+
+            r_cur.execute("""
+                SELECT coalesce(sum(units), 0), coalesce(sum(sales), 0) 
+                FROM rollup_product_day WHERE tenant_id = %s
+            """, (tid,))
+            r_units, r_sales = r_cur.fetchone()
+
+            print(f"  Tenant {tid:2d} Whole-DB Equality:")
+            print(f"    Orders : SQL={sql_orders:,} vs Rollup={r_orders:,}")
+            print(f"    Revenue: SQL=${float(sql_rev):,.2f} vs Rollup=${float(r_rev):,.2f}")
+            print(f"    Units  : SQL={sql_units:,} vs Rollup={r_units:,}")
+            print(f"    Sales  : SQL=${float(sql_sales):,.2f} vs Rollup=${float(r_sales):,.2f}")
+
+            assert sql_orders == r_orders, f"Tenant {tid} whole-tenant orders mismatch: {sql_orders} != {r_orders}"
+            assert abs(float(sql_rev) - float(r_rev)) < 0.01, f"Tenant {tid} whole-tenant revenue mismatch: {sql_rev} != {r_rev}"
+            assert sql_units == r_units, f"Tenant {tid} whole-tenant units mismatch: {sql_units} != {r_units}"
+            assert abs(float(sql_sales) - float(r_sales)) < 0.01, f"Tenant {tid} whole-tenant sales mismatch: {sql_sales} != {r_sales}"
 
         r_cur.close()
         r_conn.close()

@@ -29,6 +29,14 @@ def rebuild_tenant(tenant_id: int, profile: str = "1m", clear_first: bool = True
     t_cur.execute("SELECT pg_current_snapshot()")
     snapshot_str = t_cur.fetchone()[0]
 
+    # Find the maximum outbox row committed prior to this snapshot
+    t_cur.execute("""
+        SELECT COALESCE(MAX(id), 0), COALESCE(MAX(xid::text), '0')
+        FROM outbox
+        WHERE xid < pg_snapshot_xmin(%s::pg_snapshot)
+    """, (snapshot_str,))
+    max_safe_id, max_safe_xid = t_cur.fetchone()
+
     # 2. Query aggregated orders
     t_cur.execute("""
         SELECT 
@@ -92,17 +100,17 @@ def rebuild_tenant(tenant_id: int, profile: str = "1m", clear_first: bool = True
             r_cur.copy_expert("COPY rollup_product_day FROM STDIN WITH CSV", buf)
             buf.close()
 
-        # Update worker_state for this tenant
+        # Update worker_state for this tenant with safe cursor pre-advanced to snapshot xmin
         r_cur.execute("""
             INSERT INTO worker_state (
                 tenant_id, cursor_xid, cursor_id, snapshot, last_batch_at, 
                 lag_seconds, heartbeat, stalled, last_error, has_pending, oldest_pending_ts
             )
-            VALUES (%s, '0'::xid8, 0, %s::pg_snapshot, clock_timestamp(), 0.0, clock_timestamp(), false, NULL, false, NULL)
+            VALUES (%s, %s::xid8, %s, %s::pg_snapshot, clock_timestamp(), 0.0, clock_timestamp(), false, NULL, false, NULL)
             ON CONFLICT (tenant_id)
             DO UPDATE SET
-                cursor_xid = '0'::xid8,
-                cursor_id = 0,
+                cursor_xid = EXCLUDED.cursor_xid,
+                cursor_id = EXCLUDED.cursor_id,
                 snapshot = EXCLUDED.snapshot,
                 last_batch_at = clock_timestamp(),
                 lag_seconds = 0.0,
@@ -111,7 +119,7 @@ def rebuild_tenant(tenant_id: int, profile: str = "1m", clear_first: bool = True
                 last_error = NULL,
                 has_pending = false,
                 oldest_pending_ts = NULL
-        """, (tenant_id, snapshot_str))
+        """, (tenant_id, max_safe_xid, max_safe_id, snapshot_str))
 
         r_conn.commit()
     except Exception as e:

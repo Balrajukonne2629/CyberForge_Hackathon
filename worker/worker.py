@@ -25,7 +25,7 @@ class MultiTenantWorker:
         worker_id: int = 0,
         worker_count: int = 1,
         per_tenant_cap: int = 500,
-        poll_interval: float = 0.05,
+        poll_interval: float = 0.1,
         target_tenants: Optional[List[int]] = None
     ):
         self.profile = profile

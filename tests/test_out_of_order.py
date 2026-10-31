@@ -48,60 +48,66 @@ def run_out_of_order_test(profile: str = "1m"):
         clean_cur.execute("DELETE FROM orders WHERE order_id IN (%s, %s)", (oid1, oid2))
         time.sleep(0.1)
 
-        # 1. T1 begins and inserts (leaves open)
-        cur1.execute("""
-            INSERT INTO orders (order_id, tenant_id, customer_id, status, total, created_at, updated_at)
-            VALUES (%s, %s, 1, 'delivered', 100.00, %s, %s)
-        """, (oid1, tid, test_hour, test_hour))
-        cur1.execute("""
-            INSERT INTO order_items (item_id, order_id, tenant_id, product_id, qty, price)
-            VALUES (%s, %s, %s, %s, 1, 100.00)
-        """, (iid1, oid1, tid, pid))
+        try:
+            # 1. T1 begins and inserts (leaves open)
+            cur1.execute("""
+                INSERT INTO orders (order_id, tenant_id, customer_id, status, total, created_at, updated_at)
+                VALUES (%s, %s, 1, 'delivered', 100.00, %s, %s)
+            """, (oid1, tid, test_hour, test_hour))
+            cur1.execute("""
+                INSERT INTO order_items (item_id, order_id, tenant_id, product_id, qty, price)
+                VALUES (%s, %s, %s, %s, 1, 100.00)
+            """, (iid1, oid1, tid, pid))
 
-        # 2. T2 begins, inserts and COMMITS before T1
-        cur2.execute("""
-            INSERT INTO orders (order_id, tenant_id, customer_id, status, total, created_at, updated_at)
-            VALUES (%s, %s, 1, 'delivered', 200.00, %s, %s)
-        """, (oid2, tid, test_hour, test_hour))
-        cur2.execute("""
-            INSERT INTO order_items (item_id, order_id, tenant_id, product_id, qty, price)
-            VALUES (%s, %s, %s, %s, 2, 100.00)
-        """, (iid2, oid2, tid, pid))
-        conn2.commit()
+            # 2. T2 begins, inserts and COMMITS before T1
+            cur2.execute("""
+                INSERT INTO orders (order_id, tenant_id, customer_id, status, total, created_at, updated_at)
+                VALUES (%s, %s, 1, 'delivered', 200.00, %s, %s)
+            """, (oid2, tid, test_hour, test_hour))
+            cur2.execute("""
+                INSERT INTO order_items (item_id, order_id, tenant_id, product_id, qty, price)
+                VALUES (%s, %s, %s, %s, 2, 100.00)
+            """, (iid2, oid2, tid, pid))
+            conn2.commit()
 
-        # 3. Check pg_snapshot_xmin: T2 cannot be ingested yet because T1 is open
-        clean_cur.execute("SELECT pg_snapshot_xmin(pg_current_snapshot())::text")
-        xmin = clean_cur.fetchone()[0]
-        clean_cur.execute("SELECT xid::text FROM outbox WHERE id = (SELECT max(id) FROM outbox)")
-        t2_xid = clean_cur.fetchone()[0]
-        print(f"  Tenant {tid}: xmin={xmin}, T2.xid={t2_xid} (T2 deferred while T1 open)")
+            # 3. Check pg_snapshot_xmin: T2 cannot be ingested yet because T1 is open
+            clean_cur.execute("SELECT pg_snapshot_xmin(pg_current_snapshot())::text")
+            xmin = clean_cur.fetchone()[0]
+            clean_cur.execute("SELECT xid::text FROM outbox WHERE id = (SELECT max(id) FROM outbox)")
+            t2_xid = clean_cur.fetchone()[0]
+            print(f"  Tenant {tid}: xmin={xmin}, T2.xid={t2_xid} (T2 deferred while T1 open)")
 
-        # 4. T1 commits after T2
-        conn1.commit()
+            # 4. T1 commits after T2
+            conn1.commit()
 
-        # 5. Wait for worker to consume both
-        wait_for_worker(profile, tenant_id=tid, timeout=10.0)
+            # 5. Wait for worker to consume both
+            wait_for_worker(profile, tenant_id=tid, timeout=10.0)
 
-        # 6. Verify in rollup that BOTH orders were counted
-        r_conn = psycopg2.connect(rollup_url)
-        r_cur = r_conn.cursor()
-        r_cur.execute("""
-            SELECT order_count, revenue FROM rollup_orders_hour
-            WHERE tenant_id = %s AND hour = %s AND status = 'delivered'
-        """, (tid, test_hour))
-        res = r_cur.fetchone()
-        print(f"  Tenant {tid} Rollup result: order_count={res[0]}, revenue={res[1]}")
-        assert res and res[0] >= 2, f"Tenant {tid}: expected at least 2 orders, got {res}"
+            # 6. Verify in rollup that BOTH orders were counted
+            r_conn = psycopg2.connect(rollup_url)
+            r_cur = r_conn.cursor()
+            r_cur.execute("""
+                SELECT order_count, revenue FROM rollup_orders_hour
+                WHERE tenant_id = %s AND hour = %s AND status = 'delivered'
+            """, (tid, test_hour))
+            res = r_cur.fetchone()
+            print(f"  Tenant {tid} Rollup result: order_count={res[0]}, revenue={res[1]}")
+            assert res and res[0] >= 2, f"Tenant {tid}: expected at least 2 orders, got {res}"
+            r_cur.close()
+            r_conn.close()
 
-        # Cleanup
-        clean_cur.execute("DELETE FROM order_items WHERE item_id IN (%s, %s)", (iid1, iid2))
-        clean_cur.execute("DELETE FROM orders WHERE order_id IN (%s, %s)", (oid1, oid2))
-        wait_for_worker(profile, tenant_id=tid, timeout=10.0)
+        finally:
+            # Guaranteed cleanup
+            try:
+                clean_cur.execute("DELETE FROM order_items WHERE item_id IN (%s, %s)", (iid1, iid2))
+                clean_cur.execute("DELETE FROM orders WHERE order_id IN (%s, %s)", (oid1, oid2))
+                wait_for_worker(profile, tenant_id=tid, timeout=10.0)
+            except Exception:
+                pass
 
-        cur1.close(); conn1.close()
-        cur2.close(); conn2.close()
-        clean_cur.close(); clean_conn.close()
-        r_cur.close(); r_conn.close()
+            cur1.close(); conn1.close()
+            cur2.close(); conn2.close()
+            clean_cur.close(); clean_conn.close()
 
     print("\n>>> OUT-OF-ORDER COMMIT TEST PASSED 100% ACROSS ALL 3 TENANTS <<<")
     return True
