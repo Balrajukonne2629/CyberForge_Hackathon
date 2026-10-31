@@ -1,0 +1,69 @@
+database:
+  main_1m: "postgresql://postgres:postgres@localhost:5432/shop"
+  main_10m: "postgresql://postgres:postgres@localhost:5432/shop_10m"
+  rollup_1m: "postgresql://postgres:postgres@localhost:5433/rollup_1m"
+  rollup_10m: "postgresql://postgres:postgres@localhost:5433/rollup_10m"
+  main_db_url: "postgresql://postgres:postgres@localhost:5432/shop"
+  rollup_db_url: "postgresql://postgres:postgres@localhost:5433/rollup_1m"
+
+schema:
+  tables:
+    tenants: "tenants"
+    customers: "customers"
+    products: "products"
+    orders: "orders"
+    order_items: "order_items"
+    outbox: "outbox"
+
+  columns:
+    tenant_id: "tenant_id"
+    order_id: "order_id"
+    customer_id: "customer_id"
+    item_id: "item_id"
+    product_id: "product_id"
+    category: "category"
+    status: "status"
+    total: "total"
+    price: "price"
+    qty: "qty"
+    created_at: "created_at"
+    updated_at: "updated_at"
+
+business_rules:
+  excluded_statuses:
+    - "canceled"
+    - "unavailable"
+  all_statuses:
+    - "created"
+    - "approved"
+    - "invoiced"
+    - "processing"
+    - "shipped"
+    - "delivered"
+    - "canceled"
+    - "unavailable"
+
+rollups:
+  orders_hour:
+    table: "rollup_orders_hour"
+    dimensions:
+      - "tenant_id"
+      - "hour"
+      - "status"
+    metrics:
+      - "order_count"
+      - "revenue"
+  product_day:
+    table: "rollup_product_day"
+    dimensions:
+      - "tenant_id"
+      - "day"
+      - "product_id"
+      - "category"
+    metrics:
+      - "units"
+      - "sales"
+
+auth:
+  admin_key: "admin-secret-key-12345"
+  key_prefix: "tenant-key-"

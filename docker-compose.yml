@@ -1,0 +1,83 @@
+services:
+  main-db:
+    image: postgres:16-alpine
+    container_name: cyberforge-main-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: shop
+    command: >
+      postgres
+      -c shared_buffers=1GB
+      -c work_mem=64MB
+      -c maintenance_work_mem=512MB
+      -c checkpoint_completion_target=0.9
+      -c max_wal_size=4GB
+    ports:
+      - "5432:5432"
+    volumes:
+      - main_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d shop"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  rollup-db:
+    image: postgres:16-alpine
+    container_name: cyberforge-rollup-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rollup_1m
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c work_mem=32MB
+      -c maintenance_work_mem=256MB
+    ports:
+      - "5433:5432"
+    volumes:
+      - rollup_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rollup_1m"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cyberforge-api
+    restart: unless-stopped
+    environment:
+      ROLLUP_DB_URL: "postgresql://postgres:postgres@rollup-db:5432/rollup_1m"
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      rollup-db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cyberforge-worker
+    restart: unless-stopped
+    environment:
+      MAIN_DB_URL: "postgresql://postgres:postgres@main-db:5432/shop"
+      ROLLUP_DB_URL: "postgresql://postgres:postgres@rollup-db:5432/rollup_1m"
+    command: ["python", "worker/worker.py"]
+    depends_on:
+      main-db:
+        condition: service_healthy
+      rollup-db:
+        condition: service_healthy
+
+volumes:
+  main_pgdata:
+  rollup_pgdata:
