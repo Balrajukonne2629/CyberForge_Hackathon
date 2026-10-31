@@ -152,7 +152,14 @@ class MultiTenantWorker:
                 ))
                 rows = t_cur.fetchall()
             except Exception as read_err:
-                # Connection or outbox query error on tenant DB
+                # Connection or outbox query error on tenant DB - reconnect
+                try:
+                    c = psycopg2.connect(get_tenant_db_url(tid, self.profile))
+                    c.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+                    self.tenant_conns[tid] = c
+                    self.tenant_curs[tid] = c.cursor()
+                except Exception:
+                    pass
                 continue
 
             if not rows:
@@ -218,10 +225,11 @@ class MultiTenantWorker:
                     items_folded[key]["units"] += d_cnt
                     items_folded[key]["sales"] += float(d_amt)
 
-            # Check for further pending rows on this tenant
+            # Check for further pending rows on this tenant using outbox enqueue time (created_at)
             try:
                 t_cur.execute("""
-                    SELECT created_at FROM outbox
+                    SELECT EXTRACT(EPOCH FROM (clock_timestamp() - created_at)), created_at
+                    FROM outbox
                     WHERE xid < pg_snapshot_xmin(pg_current_snapshot())
                       AND (xid > %s::xid8 OR (xid = %s::xid8 AND id > %s))
                     ORDER BY xid ASC, id ASC
@@ -230,9 +238,8 @@ class MultiTenantWorker:
                 pending_row = t_cur.fetchone()
                 if pending_row:
                     has_pending = True
-                    oldest_ts = pending_row[0]
-                    dt = (now_ts - oldest_ts.replace(tzinfo=datetime.timezone.utc)).total_seconds() if oldest_ts.tzinfo else (datetime.datetime.now() - oldest_ts).total_seconds()
-                    lag_sec = max(0.0, round(dt, 2))
+                    lag_sec = max(0.0, round(float(pending_row[0]), 3))
+                    oldest_ts = pending_row[1]
                 else:
                     has_pending = False
                     oldest_ts = None
@@ -345,7 +352,9 @@ class MultiTenantWorker:
             self.r_cur.execute("""
                 UPDATE worker_state SET
                     heartbeat = clock_timestamp(),
-                    lag_seconds = CASE WHEN has_pending THEN lag_seconds ELSE 0.0 END
+                    lag_seconds = CASE WHEN has_pending AND oldest_pending_ts IS NOT NULL 
+                                       THEN EXTRACT(EPOCH FROM (clock_timestamp() - oldest_pending_ts))
+                                       ELSE 0.0 END
                 WHERE tenant_id = ANY(%s) AND NOT stalled
             """, (self.owned_tenants,))
             self.r_conn.commit()
@@ -359,7 +368,7 @@ class MultiTenantWorker:
             try:
                 res = self.run_one_cycle()
                 now = time.time()
-                if now - last_hb > 1.0:
+                if now - last_hb > 5.0:
                     self.update_idle_heartbeats()
                     last_hb = now
 

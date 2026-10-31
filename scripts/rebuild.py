@@ -172,6 +172,22 @@ def rebuild_all(profile: str = "1m", tenant_count: int = 100, max_workers: int =
                 print(f"  Rebuilt {completed}/{tenant_count} tenants...")
 
     total_time = time.time() - t0
+
+    # Post-rebuild VACUUM (ANALYZE) on rollup tables
+    print("Running VACUUM (ANALYZE) on rollup tables...")
+    try:
+        cfg = get_config(profile)
+        v_conn = psycopg2.connect(cfg["database"]["rollup_db_url"])
+        v_conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        v_cur = v_conn.cursor()
+        v_cur.execute("VACUUM (ANALYZE) rollup_orders_hour;")
+        v_cur.execute("VACUUM (ANALYZE) rollup_product_day;")
+        v_cur.close()
+        v_conn.close()
+        print("  VACUUM (ANALYZE) completed successfully.")
+    except Exception as ve:
+        print(f"  VACUUM warning: {ve}")
+
     print("=" * 70)
     print(f"FULL REBUILD COMPLETE in {total_time:.2f}s")
     print(f"  Total rollup_orders_hour: {total_hour_rows:,}")

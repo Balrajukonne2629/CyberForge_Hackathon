@@ -1,57 +1,57 @@
 ======================================================================
 RUNNING ALL TRUST & INTEGRITY TESTS (PROFILE: 1M)
 ======================================================================
-Starting FastAPI server on port 8000...
-INFO:     Started server process [13024]
+Starting FastAPI server on port 8000 (profile: 1m)...
+INFO:     Started server process [21008]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     127.0.0.1:51072 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62358 - "GET /health HTTP/1.1" 200 OK
   FastAPI server is ready!
 Starting background multi-tenant rollup worker...
 
 >>> Running Suite: 1. Tenant Isolation ...
 === Running Tenant Isolation Tests (1M) ===
-INFO:     127.0.0.1:51284 - "GET /tenants/1/orders/count?from=2026-10-01&to=2026-10-10 HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:62569 - "GET /tenants/1/orders/count?from=2026-10-01&to=2026-10-10 HTTP/1.1" 403 Forbidden
 1. Missing X-Tenant-Key: 403
-INFO:     127.0.0.1:51284 - "GET /tenants/2/orders/count?from=2026-10-01&to=2026-10-10 HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:62569 - "GET /tenants/2/orders/count?from=2026-10-01&to=2026-10-10 HTTP/1.1" 403 Forbidden
 2. Tenant 1 key on Tenant 2 path: 403
-INFO:     127.0.0.1:51284 - "GET /tenants/1/orders/count?from=2026-10-01&to=2026-10-10 HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:62569 - "GET /tenants/1/orders/count?from=2026-10-01&to=2026-10-10 HTTP/1.1" 403 Forbidden
 3. Fake key: 403
-INFO:     127.0.0.1:51284 - "GET /tenants/1/orders/count?from=2026-10-01&to=2026-10-10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62569 - "GET /tenants/1/orders/count?from=2026-10-01&to=2026-10-10 HTTP/1.1" 200 OK
 4. Valid key: 200
 
 5. Verifying sum of per-tenant DBs vs rollup total for range [2026-10-01 00:00:00 to 2026-10-15 00:00:00)...
   Sum over 100 per-tenant DBs : 24,457
   Sum of Tenant rollups       : 24,457
 >>> TENANT ISOLATION TESTS PASSED 100% <<<
-  [PASS] 1. Tenant Isolation (1.35s)
+  [PASS] 1. Tenant Isolation (2.65s)
 
 >>> Running Suite: 2. Idempotency per-tenant ...
 === Running Per-Tenant Idempotency & Batch Replay Test (1M) ===
-  Tenant  1: Initial cursor=(341008, 249646) -> Advanced cursor=(341175, 249649)
-  Tenant 42: Initial cursor=(341090, 2244) -> Advanced cursor=(341177, 2247)
-  Tenant 99: Initial cursor=(341172, 2232) -> Advanced cursor=(341179, 2235)
+  Tenant  1: Initial cursor=(454473, 403478) -> Advanced cursor=(454640, 403481)
+  Tenant 42: Initial cursor=(454555, 3748) -> Advanced cursor=(454642, 3751)
+  Tenant 99: Initial cursor=(454637, 3728) -> Advanced cursor=(454644, 3731)
 >>> PER-TENANT IDEMPOTENCY & BATCH REPLAY TEST PASSED 100% <<<
-  [PASS] 2. Idempotency per-tenant (1.57s)
+  [PASS] 2. Idempotency per-tenant (2.25s)
 
 >>> Running Suite: 3. Out-of-Order Commit per-tenant ...
 === Running Per-Tenant Out-of-Order Commit Test (1M) ===
 
---- Testing Out-of-Order on Tenant 1 (postgresql://postgres:postgres@localhost:5432/tenant_001) ---
-  Tenant 1: xmin=341181, T2.xid=341182 (T2 deferred while T1 open)
+--- Testing Out-of-Order on Tenant 1 (postgresql://postgres:postgres@127.0.0.1:5432/tenant_001) ---
+  Tenant 1: xmin=454646, T2.xid=454647 (T2 deferred while T1 open)
   Tenant 1 Rollup result: order_count=33, revenue=4746.63
 
---- Testing Out-of-Order on Tenant 42 (postgresql://postgres:postgres@localhost:5432/tenant_042) ---
-  Tenant 42: xmin=341185, T2.xid=341186 (T2 deferred while T1 open)
+--- Testing Out-of-Order on Tenant 42 (postgresql://postgres:postgres@127.0.0.1:5432/tenant_042) ---
+  Tenant 42: xmin=454650, T2.xid=454651 (T2 deferred while T1 open)
   Tenant 42 Rollup result: order_count=2, revenue=300.00
 
---- Testing Out-of-Order on Tenant 99 (postgresql://postgres:postgres@localhost:5432/tenant_099) ---
-  Tenant 99: xmin=341189, T2.xid=341190 (T2 deferred while T1 open)
+--- Testing Out-of-Order on Tenant 99 (postgresql://postgres:postgres@127.0.0.1:5432/tenant_099) ---
+  Tenant 99: xmin=454654, T2.xid=454655 (T2 deferred while T1 open)
   Tenant 99 Rollup result: order_count=3, revenue=406.93
 
 >>> OUT-OF-ORDER COMMIT TEST PASSED 100% ACROSS ALL 3 TENANTS <<<
-  [PASS] 3. Out-of-Order Commit per-tenant (2.81s)
+  [PASS] 3. Out-of-Order Commit per-tenant (2.45s)
 
 >>> Running Suite: 4. Single-Tenant Mutation & Fan-out ...
 === Running Mutation & Fan-Out Tests on Tenant 1 (1M) ===
@@ -71,19 +71,19 @@ INFO:     127.0.0.1:51284 - "GET /tenants/1/orders/count?from=2026-10-01&to=2026
 [TEST 5] Deleting order item and order...
 
 >>> ALL MUTATION & FAN-OUT TESTS PASSED WITH 100% EXACT PARITY! <<<
-  [PASS] 4. Single-Tenant Mutation & Fan-out (1.57s)
+  [PASS] 4. Single-Tenant Mutation & Fan-out (1.78s)
 
 >>> Running Suite: 5. Concurrent Multi-Tenant Updates (25 DBs) ...
 ======================================================================
 RUNNING CONCURRENT MULTI-TENANT MUTATIONS (25 TENANT DBS)
 ======================================================================
 Executing concurrent mutations on 25 tenant DBs in parallel (25 threads)...
-Mutations finished on 25 tenant DBs in 0.59s
+Mutations finished on 25 tenant DBs in 0.69s
 Waiting for rollup worker to process all outbox deltas...
 Verifying ground-truth parity for all 25 touched tenants against their OWN DBs...
 Concurrent Parity Result: 25/25 tenants passed (mismatches=0)
 >>> CONCURRENT MULTI-TENANT TEST PASSED 100% <<<
-  [PASS] 5. Concurrent Multi-Tenant Updates (25 DBs) (7.48s)
+  [PASS] 5. Concurrent Multi-Tenant Updates (25 DBs) (8.79s)
 
 >>> Running Suite: 6. Fairness & Anti-Starvation ...
 ======================================================================
@@ -91,32 +91,32 @@ RUNNING FAIRNESS & ANTI-STARVATION TEST (1M)
 Flooding Tenant 1 with 2,000 outbox rows | Monitoring Tenants 2, 10, 42
 ======================================================================
 1. Injecting burst of 2,000 outbox rows into Tenant 1...
-  Injected 2,000 rows into Tenant 1 (max outbox id: 251690) in 0.02s
+  Injected 2,000 rows into Tenant 1 (max outbox id: 405522) in 0.02s
 2. Inserting orders into observer tenants (2, 10, 42) with distinct timestamps...
 3. Timing observer tenants separately to their own rollup visibility...
 
 OBSERVER TENANT TIMINGS (Individual Commit -> Rollup Visibility):
-  Tenant  2: Ingestion latency = 194.0ms | Worker lag_seconds = 0.000s
-  Tenant 10: Ingestion latency = 126.7ms | Worker lag_seconds = 0.000s
-  Tenant 42: Ingestion latency = 239.6ms | Worker lag_seconds = 0.000s
+  Tenant  2: Ingestion latency = 196.1ms | Worker lag_seconds = 0.000s
+  Tenant 10: Ingestion latency = 125.6ms | Worker lag_seconds = 0.000s
+  Tenant 42: Ingestion latency = 81.0ms | Worker lag_seconds = 0.000s
 
 4. Monitoring flooded Tenant 1 draining 2,000 rows and sampling lag over time...
-  Flooded Tenant 1 drain completed in 0.36s (Peak lag: 19800.59s)
-  Tenant 1 lag progression over time: [(0.0, 19800.35), (0.05, 19800.35), (0.1, 19800.35), (0.16, 19800.59), (0.21, 19800.59), (0.26, 19800.59), (0.31, 19800.59), (0.36, 0.0)] ... [(0.26, 19800.59), (0.31, 19800.59), (0.36, 0.0)]
+  Flooded Tenant 1 drain completed in 0.78s (Peak lag: 0.77s)
+  Tenant 1 lag progression over time: [(0.0, 0.12), (0.05, 0.12), (0.1, 0.12), (0.15, 0.12), (0.21, 0.49), (0.26, 0.49), (0.31, 0.49), (0.36, 0.49)] ... [(0.67, 0.77), (0.72, 0.77), (0.78, 0.0)]
 
 4. Waiting for flooded Tenant 1 to complete ingestion...
 
 >>> FAIRNESS & ANTI-STARVATION TEST PASSED 100% <<<
-  [PASS] 6. Fairness & Anti-Starvation (2.10s)
+  [PASS] 6. Fairness & Anti-Starvation (2.64s)
 
 >>> Running Suite: 7. Quarantine Handling ...
 === Running Quarantine Test (1M) ===
 1. Injecting malformed outbox rows on Tenant 1...
-  Injected bad outbox row ids: [253691, 253692]
-3. Rows in quarantine table: [(52, 1, 253691, 'Unknown order status: corrupted_status_xyz'), (53, -99, 253692, 'Invalid tenant_id: -99')]
+  Injected bad outbox row ids: [407523, 407524]
+3. Rows in quarantine table: [(60, 1, 407523, 'Unknown order status: corrupted_status_xyz'), (61, -99, 407524, 'Invalid tenant_id: -99')]
 4. Worker stalled status for Tenant 1: False
 >>> QUARANTINE TEST PASSED 100% <<<
-  [PASS] 7. Quarantine Handling (0.87s)
+  [PASS] 7. Quarantine Handling (0.28s)
 
 >>> Running Suite: 8. Crash Recovery per-tenant ...
 === Running Per-Tenant Crash Recovery Test (1M) ===
@@ -144,7 +144,7 @@ OBSERVER TENANT TIMINGS (Individual Commit -> Rollup Visibility):
     Sales  : SQL=$355,343.33 vs Rollup=$355,343.33
 
 >>> PER-TENANT CRASH RECOVERY TEST PASSED 100% <<<
-  [PASS] 8. Crash Recovery per-tenant (6.78s)
+  [PASS] 8. Crash Recovery per-tenant (7.48s)
 
 >>> Running Suite: 9. Per-Tenant Fail Closed & Stall Isolation ...
 === Running Per-Tenant Fail-Closed Constraint Test (1M) ===
@@ -155,24 +155,24 @@ OBSERVER TENANT TIMINGS (Individual Commit -> Rollup Visibility):
 DETAIL:  Failing row contains (5, 2026-10-31 00:00:00, delivered, -999999, -999999.00).
 
   Tenant 1 successfully ingested despite Tenant 5 stall!
-INFO:     127.0.0.1:52303 - "GET /tenants/5/orders/count?from=2026-10-01&to=2026-10-30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63424 - "GET /tenants/5/orders/count?from=2026-10-01&to=2026-10-30 HTTP/1.1" 200 OK
 4. Tenant 5 API worker_stalled: True
-INFO:     127.0.0.1:52303 - "GET /tenants/1/orders/count?from=2026-10-01&to=2026-10-30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63424 - "GET /tenants/1/orders/count?from=2026-10-01&to=2026-10-30 HTTP/1.1" 200 OK
 5. Tenant 1 API worker_stalled: False
-INFO:     127.0.0.1:52303 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63424 - "GET /health HTTP/1.1" 200 OK
 6. Global /health response: status=stalled, stalled=[5]
 7. Remediating Tenant 5: removing bad outbox row and resetting stalled flag...
 
 >>> PER-TENANT FAIL-CLOSED TEST PASSED 100% <<<
-  [PASS] 9. Per-Tenant Fail Closed & Stall Isolation (3.12s)
+  [PASS] 9. Per-Tenant Fail Closed & Stall Isolation (3.89s)
 
 >>> Running Suite: 10. Rebuild Equality under Load per-tenant ...
 === Running Per-Tenant Rebuild Equality Test (1M) ===
 
---- Testing Rebuild Equality on Tenant 1 (postgresql://postgres:postgres@localhost:5432/tenant_001) ---
+--- Testing Rebuild Equality on Tenant 1 (postgresql://postgres:postgres@127.0.0.1:5432/tenant_001) ---
 1. Injecting writes before & during rebuild on Tenant 1...
 2. Running targeted rebuild_tenant(1)...
-  Rebuild result: snapshot=341772:341772:, hour_rows=21350
+  Rebuild result: snapshot=455239:455239:, hour_rows=21350
 3. Injecting further writes post-rebuild on Tenant 1...
 4. Waiting for worker to catch up on Tenant 1...
 5. Equality check for Tenant 1:
@@ -181,10 +181,10 @@ INFO:     127.0.0.1:52303 - "GET /health HTTP/1.1" 200 OK
    Units  : SQL=342642 vs Rollup=342642
    Sales  : SQL=$48,625,312.31 vs Rollup=$48,625,312.31
 
---- Testing Rebuild Equality on Tenant 42 (postgresql://postgres:postgres@localhost:5432/tenant_042) ---
+--- Testing Rebuild Equality on Tenant 42 (postgresql://postgres:postgres@127.0.0.1:5432/tenant_042) ---
 1. Injecting writes before & during rebuild on Tenant 42...
 2. Running targeted rebuild_tenant(42)...
-  Rebuild result: snapshot=341854:341854:, hour_rows=3797
+  Rebuild result: snapshot=455323:455323:, hour_rows=3797
 3. Injecting further writes post-rebuild on Tenant 42...
 4. Waiting for worker to catch up on Tenant 42...
 5. Equality check for Tenant 42:
@@ -193,10 +193,10 @@ INFO:     127.0.0.1:52303 - "GET /health HTTP/1.1" 200 OK
    Units  : SQL=8002 vs Rollup=8002
    Sales  : SQL=$1,251,705.08 vs Rollup=$1,251,705.08
 
---- Testing Rebuild Equality on Tenant 99 (postgresql://postgres:postgres@localhost:5432/tenant_099) ---
+--- Testing Rebuild Equality on Tenant 99 (postgresql://postgres:postgres@127.0.0.1:5432/tenant_099) ---
 1. Injecting writes before & during rebuild on Tenant 99...
 2. Running targeted rebuild_tenant(99)...
-  Rebuild result: snapshot=341936:341936:, hour_rows=1759
+  Rebuild result: snapshot=455405:455405:, hour_rows=1759
 3. Injecting further writes post-rebuild on Tenant 99...
 4. Waiting for worker to catch up on Tenant 99...
 5. Equality check for Tenant 99:
@@ -206,515 +206,515 @@ INFO:     127.0.0.1:52303 - "GET /health HTTP/1.1" 200 OK
    Sales  : SQL=$354,597.73 vs Rollup=$354,597.73
 
 >>> PER-TENANT REBUILD EQUALITY TEST PASSED 100% ACROSS ALL 3 TENANTS <<<
-  [PASS] 10. Rebuild Equality under Load per-tenant (8.14s)
+  [PASS] 10. Rebuild Equality under Load per-tenant (9.93s)
 
 >>> Running Suite: 11. Golden Ground-Truth Parity vs Tenant DBs ...
 ======================================================================
 RUNNING GOLDEN PARITY CHECK (PROFILE: 1M)
 Testing against per-tenant isolated databases.
 ======================================================================
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/count?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/by-status?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/1/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/count?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/by-status?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/99/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/count?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/by-status?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/42/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/count?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/by-status?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/77/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/count?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/by-status?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/2/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/count?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/by-status?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/5/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/count?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/by-status?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/10/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/count?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/by-status?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/25/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/count?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/by-status?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/50/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/count?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/by-status?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2026-10-31%2014:00:00&to=2026-10-31%2016:00:00&n=10&by=units HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52644 - "GET /tenants/90/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/count?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/by-status?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/1/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/count?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/by-status?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/99/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/count?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/by-status?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/42/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/count?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/by-status?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/77/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/count?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/by-status?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/2/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/count?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/by-status?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/5/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/count?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/by-status?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/10/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/count?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/by-status?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/25/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/count?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/by-status?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/50/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/count?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/by-status?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2026-10-25%2010:00:00&to=2026-10-25%2011:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/count?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/by-status?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2026-10-25%2000:00:00&to=2026-10-26%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/count?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/by-status?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2026-10-23%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/count?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/by-status?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2026-10-01%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/count?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/by-status?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2024-10-31%2000:00:00&to=2026-10-30%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/count?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/by-status?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2020-01-01%2000:00:00&to=2020-01-02%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/count?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/by-status?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2026-10-31%2015:00:00&to=2026-10-31%2017:00:00&n=10&by=units HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/count?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=hour HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/trend?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&grain=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/orders/by-status?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=sales HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57428 - "GET /tenants/90/products/top?from=2026-09-25%2000:00:00&to=2026-10-05%2000:00:00&n=10&by=units HTTP/1.1" 200 OK
 
 GOLDEN CHECK RESULTS: 480/480 passed. Total mismatches: 0
-  [PASS] 11. Golden Ground-Truth Parity vs Tenant DBs (11.80s)
+  [PASS] 11. Golden Ground-Truth Parity vs Tenant DBs (14.43s)
 
 >>> Running Final Data Integrity Tripwire Check...
 
 [TRIPWIRE] Verifying dataset integrity across 100 tenant DBs (profile: 1m)...
-  [TRIPWIRE OK] Exact match in 1.69s: Orders = 1,000,000 | Order Items = 1,141,449
+  [TRIPWIRE OK] Exact match in 2.09s: Orders = 1,000,000 | Order Items = 1,141,449
 
 ======================================================================
 TEST SUITE SUMMARY (1M):
-  1. Tenant Isolation                          :     PASS (1.35s)
-  2. Idempotency per-tenant                    :     PASS (1.57s)
-  3. Out-of-Order Commit per-tenant            :     PASS (2.81s)
-  4. Single-Tenant Mutation & Fan-out          :     PASS (1.57s)
-  5. Concurrent Multi-Tenant Updates (25 DBs)  :     PASS (7.48s)
-  6. Fairness & Anti-Starvation                :     PASS (2.10s)
-  7. Quarantine Handling                       :     PASS (0.87s)
-  8. Crash Recovery per-tenant                 :     PASS (6.78s)
-  9. Per-Tenant Fail Closed & Stall Isolation  :     PASS (3.12s)
-  10. Rebuild Equality under Load per-tenant   :     PASS (8.14s)
-  11. Golden Ground-Truth Parity vs Tenant DBs :     PASS (11.80s)
+  1. Tenant Isolation                          :     PASS (2.65s)
+  2. Idempotency per-tenant                    :     PASS (2.25s)
+  3. Out-of-Order Commit per-tenant            :     PASS (2.45s)
+  4. Single-Tenant Mutation & Fan-out          :     PASS (1.78s)
+  5. Concurrent Multi-Tenant Updates (25 DBs)  :     PASS (8.79s)
+  6. Fairness & Anti-Starvation                :     PASS (2.64s)
+  7. Quarantine Handling                       :     PASS (0.28s)
+  8. Crash Recovery per-tenant                 :     PASS (7.48s)
+  9. Per-Tenant Fail Closed & Stall Isolation  :     PASS (3.89s)
+  10. Rebuild Equality under Load per-tenant   :     PASS (9.93s)
+  11. Golden Ground-Truth Parity vs Tenant DBs :     PASS (14.43s)
   12. Dataset Integrity Tripwire               :     PASS (0.00s)
 ======================================================================
 SUCCESS: All 11 test suites passed with 100% ground-truth parity!

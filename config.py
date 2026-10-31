@@ -35,7 +35,7 @@ def get_tenant_db_url(
 ) -> str:
     cfg = get_config(profile)
     tdb = cfg.get("tenant_db", {})
-    h = host or os.getenv("MAIN_DB_HOST", tdb.get("host", "localhost"))
+    h = host or os.getenv("MAIN_DB_HOST", tdb.get("host", "127.0.0.1"))
     p = port or int(os.getenv("MAIN_DB_PORT", tdb.get("port", 5432)))
     u = user or os.getenv("MAIN_DB_USER", tdb.get("user", "postgres"))
     pwd = password or os.getenv("MAIN_DB_PASSWORD", tdb.get("password", "postgres"))
