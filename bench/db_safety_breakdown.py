@@ -22,6 +22,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 import httpx
 import psycopg2
+import psutil
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from config import get_config, get_tenant_db_url
@@ -123,7 +124,7 @@ def run_single_measurement(
 
     p_worker = None
     if has_worker:
-        p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile, "--poll-interval", str(poll_interval)])
+        p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile, "--mode", "event", "--debounce-ms", "10"])
         time.sleep(1.0)
 
     p_dashboard = None
@@ -202,12 +203,22 @@ def run_single_measurement(
     t_oltp.start()
     t_write.start()
 
-    time.sleep(duration)
+    # Sample host CPU% and docker stats
+    host_cpu = psutil.cpu_percent(interval=1.0)
+    time.sleep(max(0.1, duration - 1.0))
     stop_measurement.set()
 
     t_oltp.join()
     t_write.join()
     actual_duration = time.perf_counter() - t0_all
+
+    docker_stats = ""
+    if has_worker:
+        try:
+            res = subprocess.run(["docker", "stats", "--no-stream", "--format", "{{.Name}}: {{.CPUPerc}}"], capture_output=True, text=True, timeout=3)
+            docker_stats = res.stdout.strip().replace("\n", " | ")
+        except Exception:
+            docker_stats = "N/A"
 
     # Server side query execution metrics
     server_mean_ms, server_max_ms, s_calls = get_pg_stat_statements_metrics(profile, tid=1)
@@ -249,6 +260,8 @@ def run_single_measurement(
         "server_mean": server_mean_ms,
         "server_max": server_max_ms,
         "server_calls": s_calls,
+        "host_cpu": host_cpu,
+        "docker_stats": docker_stats,
     }
 
 def run_benchmark_breakdown(profile: str = "1m", repeats: int = 5, duration: float = 4.0, poll_interval: float = 0.5):
@@ -331,6 +344,8 @@ def run_benchmark_breakdown(profile: str = "1m", repeats: int = 5, duration: flo
                 "tput_std": statistics.stdev(tputs) if len(tputs) > 1 else 0.0,
                 "server_mean": statistics.mean(s_means),
                 "server_std": statistics.stdev(s_means) if len(s_means) > 1 else 0.0,
+                "host_cpu": statistics.mean([r.get("host_cpu", 0.0) for r in raw_results[key]]),
+                "docker_stats": [r.get("docker_stats", "") for r in raw_results[key] if r.get("docker_stats")][-1] if any(r.get("docker_stats") for r in raw_results[key]) else "N/A",
             }
 
         print("\n" + "=" * 130)
@@ -348,6 +363,12 @@ def run_benchmark_breakdown(profile: str = "1m", repeats: int = 5, duration: flo
             s_mean_str = f"{s['server_mean']:.2f} ± {s['server_std']:.2f}"
             tput_str = f"{s['tput_mean']:.1f} ± {s['tput_std']:.1f}"
             print(f"({key:<2}) {s['name']:<35} | {p50_str:<15} | {p95_str:<15} | {p99_str:<15} | {mean_str:<15} | {s_mean_str:<17} | {tput_str:<18}")
+
+        print("\n" + "=" * 130)
+        print("RESOURCE UTILIZATION FOR (c) AND (d8):")
+        print("=" * 130)
+        print(f"  (c)  Event Worker Only   : Host CPU = {stats_summary['c']['host_cpu']:.1f}% | Docker Containers = {stats_summary['c']['docker_stats']}")
+        print(f"  (d8) Event Worker + 8 Cl : Host CPU = {stats_summary['d8']['host_cpu']:.1f}% | Docker Containers = {stats_summary['d8']['docker_stats']}")
 
         # Organizer Threshold Evaluations using BOTH p50 and p95 (worse one decides)
         base_p50 = stats_summary["a"]["p50_mean"]

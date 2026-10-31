@@ -168,7 +168,7 @@ def run_all(profile: str):
         print("FAILURE: One or more test suites failed.")
         sys.exit(1)
     else:
-        print("SUCCESS: All 13 test suites passed with 100% ground-truth parity!")
+        print(f"SUCCESS: All {len(results)} test suites passed with 100% ground-truth parity!")
         sys.exit(0)
 
 if __name__ == "__main__":

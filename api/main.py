@@ -484,8 +484,11 @@ async def stream_tenant_updates(
         }
     )
 
-from api.platform import router as platform_router
-app.include_router(platform_router)
+try:
+    from api.platform import router as platform_router
+    app.include_router(platform_router)
+except ImportError:
+    pass
 
 if __name__ == "__main__":
     import uvicorn

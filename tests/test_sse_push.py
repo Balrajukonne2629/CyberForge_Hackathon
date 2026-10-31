@@ -34,6 +34,12 @@ def run_sse_push_test(profile: str = "1m", probes: int = 50):
         assert r.status_code == 403, f"Expected 403 for wrong key, got {r.status_code}"
         print("  Mismatched X-Tenant-Key: 403 Forbidden (Verified)")
 
+        # Cross-tenant key (tenant 2 key accessing tenant 1 stream)
+        other_key = "tenant-key-2"
+        r = client.get(f"/tenants/{tid}/stream", headers={"X-Tenant-Key": other_key})
+        assert r.status_code == 403, f"Expected 403 for cross-tenant key, got {r.status_code}"
+        print("  Cross-Tenant X-Tenant-Key: 403 Forbidden (Verified)")
+
     # 2. Connect to SSE stream and measure 50 probes
     print(f"\n[2] Connecting to /tenants/{tid}/stream and measuring {probes} commit-to-SSE probes...")
 
