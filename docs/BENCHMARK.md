@@ -1,48 +1,67 @@
-# CyberForge Benchmark & Empirical Baseline
-
-**Hardware Environment:**
-- **Machine / CPU:** Intel64 Family 6 Model 154 Stepping 4, GenuineIntel (12 logical CPUs)
-- **Memory (RAM):** 15.7 GB
-- **Operating System:** Windows 11 (10.0.26300)
-- **Database Engine:** PostgreSQL 16.8 (Alpine) in Docker Desktop (named volumes)
-- **Runtime:** Python 3.12.10 x64
+# Benchmark Report: Multi-Tenant Aggregation Layer
+**Generated:** 2026-10-31T10:33:44.590268+00:00  
+**Hardware:** 12 vCPUs, 15.7 GB RAM, Windows 11 (AMD64)  
+**Database:** PostgreSQL 16.8 (Alpine Docker)  
+**Git Commit:** `da88e29`  
 
 ---
 
-## 1. Baseline Performance: Direct Main DB (Without Aggregation Layer)
+## 1. Executive Summary & PRD Scoreboard
 
-Direct naive queries executed against `main-db` with the baseline indexes from `post_load.sql`:
-- `orders (tenant_id, created_at)`
-- `order_items (order_id)`
-- `order_items (tenant_id, product_id)`
+| Metric | Measured | Good Target | Great Target | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Query Latency p95 (10M)** | `82.27 ms` | `<= 100 ms` | `<= 20 ms` | **GOOD** |
+| **Query Scale Factor (10M / 1M)** | `1.90x` | `<= 3.0x` | `<= 1.5x (flat)` | **GOOD** |
+| **Freshness Lag p95** | `0.220 s (219.7 ms)` | `<= 1.0 s` | `<= 0.5 s` | **GREAT** |
+| **OLTP Write Overhead (Triggers+Worker)** | `17.5% drop` | `<= 20%` | `<= 10%` | **GOOD** |
+| **OLTP Write Overhead (+Concurrent API)** | `59.7% drop` | `<= 25%` | `<= 15%` | **FAIL** |
+| **Rollup Storage Ratio (10M)** | `43.24%` | `<= 15%` | `<= 8%` | **FAIL** |
 
-**Methodology:**
-- 10 sample tenants spanning the Zipf distribution: Tenants 1, 2, 3, 5, 10, 25, 50, 75, 90, 99.
-- 5 warm-up iterations + 30 timed iterations per query per tenant (300 timed runs per query).
-- Query range: 30 days (`2026-10-01 00:00:00` to `2026-10-30 00:00:00`).
+---
 
-### 1M Dataset (1,000,000 orders, 1,141,449 items)
+## 2. Query Latency Breakdown (API HTTP localhost)
 
-| Query | Aggregate p50 | Aggregate p95 | Aggregate Max | Tenant 1 (Largest) p95 |
-|---|---|---|---|---|
-| **1. Count & Revenue (FR-1)** | 1.18 ms | 6.63 ms | 8.28 ms | 7.38 ms |
-| **2a. Hourly Trend (FR-2)** | 1.92 ms | 10.99 ms | 23.14 ms | 13.59 ms |
-| **2b. Daily Trend (FR-2)** | 1.29 ms | 9.37 ms | 13.41 ms | 12.53 ms |
-| **3. Top 10 Products by Sales (FR-3)** | 11.32 ms | 54.32 ms | 64.70 ms | 57.30 ms |
-| **4. Breakdown by Status (FR-4)** | 3.27 ms | 17.69 ms | 21.95 ms | 21.26 ms |
+### 1M Dataset (shop / rollup_1m)
+- 10 sample tenants across 30 timed iterations per endpoint (300 calls/endpoint):
+| Endpoint | p50 | p95 | max |
+| :--- | :--- | :--- | :--- |
+| `/orders/count` | 4.03 ms | 5.82 ms | 8.28 ms |
+| `/orders/trend (hour)` | 6.29 ms | 10.06 ms | 14.10 ms |
+| `/orders/by-status` | 5.20 ms | 7.67 ms | 10.72 ms |
+| `/products/top (sales)` | 9.33 ms | 26.34 ms | 52.62 ms |
 
-### 10M Dataset (10,000,000 orders, 11,416,141 items)
+### 10M Dataset (shop_10m / rollup_10m)
+- 10 sample tenants across 30 timed iterations per endpoint:
+| Endpoint | p50 | p95 | max | Scale Factor (10M/1M) |
+| :--- | :--- | :--- | :--- | :--- |
+| `/orders/count` | 9.66 ms | 15.77 ms | 23.66 ms | 2.40x |
+| `/orders/trend (hour)` | 17.07 ms | 30.75 ms | 52.35 ms | 2.71x |
+| `/orders/by-status` | 7.14 ms | 10.66 ms | 13.65 ms | 1.37x |
+| `/products/top (sales)` | 10.48 ms | 82.27 ms | 100.68 ms | 1.12x |
 
-| Query | Aggregate p50 | Aggregate p95 | Aggregate Max | Tenant 1 (Largest) p95 | 1M -> 10M Slowdown |
-|---|---|---|---|---|---|
-| **1. Count & Revenue (FR-1)** | 8.65 ms | 122.34 ms | 209.23 ms | 185.04 ms | **18.4x** |
-| **2a. Hourly Trend (FR-2)** | 16.94 ms | 200.27 ms | 628.70 ms | 521.89 ms | **18.2x** |
-| **2b. Daily Trend (FR-2)** | 19.19 ms | 148.81 ms | 228.42 ms | 215.06 ms | **15.9x** |
-| **3. Top 10 Products by Sales (FR-3)** | 93.29 ms | 1,047.10 ms | 1,671.29 ms | 1,443.91 ms | **19.3x** |
-| **4. Breakdown by Status (FR-4)** | 9.95 ms | 152.84 ms | 242.83 ms | 212.11 ms | **8.6x** |
+---
 
-### Key Observations & Problem Confirmation
-1. **Unbounded Scan Scaling**: In the naive direct model, query latency grows by 15x-20x between 1M and 10M orders.
-2. **Failure of Complex Aggregations on Main DB**: The Top-10 Products query at 10M fails the "Good" target (<1s) on the largest tenant (1,443 ms p95, 1,671 ms max).
-3. **Noisy Neighbor Impact**: Tenant 1 (representing 19.3% of traffic) requires orders of magnitude more execution time and I/O buffer thrashing than smaller tenants (Tenant 99 executes in ~8ms while Tenant 1 takes ~1,444ms).
-4. Direct queries severely endanger the main transactional DB under concurrent dashboard usage, providing the clear motivation for the asynchronous rollup aggregation architecture.
+## 3. Freshness Probe Latency
+50 sequential orders inserted with `created_at = now()`, immediately polling API count until increment:
+- **p50:** `206.4 ms`
+- **p95:** `219.7 ms`
+- **max:** `1009.7 ms`
+
+---
+
+## 4. DB Safety & OLTP Write Overhead
+Averaged over 3 alternating rounds (A-B-C-A-B-C-A-B-C):
+| Scenario | Throughput | p50 Latency | p95 Latency | p99 Latency | Degradation |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **(a) Baseline (Triggers OFF, Worker OFF)** | 363.3 writes/s | 2.49 ms | 4.97 ms | 9.02 ms | Baseline |
+| **(b) Triggers ON, Worker ON** | 299.6 writes/s | 3.20 ms | 5.25 ms | 6.33 ms | **17.5% drop** |
+| **(c) Triggers ON + Worker + 8 API Clients** | 146.4 writes/s | 6.67 ms | 9.38 ms | 11.25 ms | **59.7% drop** |
+
+---
+
+## 5. Storage Footprint & Compression
+
+| Profile | Raw Main-DB Size | Rollup-DB Size | Rollup Ratio vs Raw |
+| :--- | :--- | :--- | :--- |
+| **1M Dataset** | 531.8 MB | 227.6 MB | **42.81%** |
+| **10M Dataset** | 3007.3 MB | 1300.4 MB | **43.24%** |

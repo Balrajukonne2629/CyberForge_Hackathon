@@ -60,9 +60,53 @@ def get_hardware_info() -> Dict[str, str]:
     }
 
 # ---------------------------------------------------------------------------
+# API Process Lifecycle Management
+# ---------------------------------------------------------------------------
+api_proc = None
+
+def set_api_profile(profile: str):
+    global api_proc
+    if api_proc and api_proc.poll() is None:
+        api_proc.terminate()
+        api_proc.wait()
+        api_proc = None
+
+    # Kill anything currently holding port 8000
+    subprocess.run([
+        "powershell", "-Command",
+        "Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+    ], capture_output=True)
+    time.sleep(1.0)
+
+    env = os.environ.copy()
+    env["PROFILE"] = profile
+    api_proc = subprocess.Popen(["py", "-3.12", "-m", "uvicorn", "api.main:app", "--host", "127.0.0.1", "--port", "8000"], env=env)
+
+    # Wait for healthcheck
+    t0 = time.time()
+    while time.time() - t0 < 15.0:
+        try:
+            r = httpx.get("http://127.0.0.1:8000/health", timeout=1.0)
+            if r.status_code == 200:
+                time.sleep(0.5)
+                return
+        except Exception:
+            pass
+        time.sleep(0.2)
+    raise RuntimeError(f"API server failed to start on profile {profile}")
+
+def stop_api():
+    global api_proc
+    if api_proc and api_proc.poll() is None:
+        api_proc.terminate()
+        api_proc.wait()
+        api_proc = None
+
+# ---------------------------------------------------------------------------
 # 1. Query Speed Benchmark
 # ---------------------------------------------------------------------------
 def benchmark_queries(profile: str, base_url: str = "http://127.0.0.1:8000") -> Dict[str, Dict[str, float]]:
+    set_api_profile(profile)
     print(f"\n--- Running Query Speed Benchmark ({profile.upper()}) ---")
     client = httpx.Client(base_url=base_url, timeout=30.0)
     tenants = [1, 99, 42, 77, 2, 5, 10, 25, 50, 90]
@@ -365,10 +409,12 @@ def get_storage_stats(profile: str) -> Dict[str, float]:
     cur_r.close()
     conn_r.close()
 
+    main_mb = float(main_raw_bytes) / (1024 * 1024)
+    rollup_mb = float(rollup_bytes) / (1024 * 1024)
     return {
-        "raw_mb": main_raw_bytes / (1024 * 1024),
-        "rollup_mb": rollup_bytes / (1024 * 1024),
-        "ratio_pct": (rollup_bytes / main_raw_bytes) * 100.0 if main_raw_bytes else 0.0
+        "raw_mb": main_mb,
+        "rollup_mb": rollup_mb,
+        "ratio_pct": (rollup_mb / main_mb) * 100.0 if main_mb else 0.0
     }
 
 # ---------------------------------------------------------------------------
@@ -389,7 +435,14 @@ def run_full_benchmark(oltp_duration: float = 10.0):
     q_10m = benchmark_queries("10m")
 
     # 3. Freshness on 1M
-    f_1m = benchmark_freshness("postgresql://postgres:postgres@localhost:5432/shop")
+    set_api_profile("1m")
+    p_worker = subprocess.Popen(["py", "-3.12", "worker/worker.py", "postgresql://postgres:postgres@localhost:5432/shop", "postgresql://postgres:postgres@localhost:5433/rollup_1m"])
+    time.sleep(1.0)
+    try:
+        f_1m = benchmark_freshness("postgresql://postgres:postgres@localhost:5432/shop")
+    finally:
+        p_worker.terminate()
+        p_worker.wait()
 
     # 4. DB Safety on 1M
     safety = benchmark_db_safety(
@@ -397,6 +450,7 @@ def run_full_benchmark(oltp_duration: float = 10.0):
         "postgresql://postgres:postgres@localhost:5433/rollup_1m",
         round_duration=oltp_duration
     )
+    stop_api()
 
     # 5. Storage Stats
     stor_1m = get_storage_stats("1m")
