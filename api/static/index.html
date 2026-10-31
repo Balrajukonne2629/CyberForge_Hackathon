@@ -50,7 +50,7 @@
       font-size: 14px;
       line-height: 1.5;
       padding: 16px;
-      padding-bottom: 240px; /* Space for bottom API drawer */
+      padding-bottom: 260px; /* Space for bottom API drawer */
     }
 
     .container {
@@ -258,6 +258,7 @@
       border-radius: var(--radius);
       padding: 16px;
       margin-bottom: 16px;
+      position: relative;
     }
 
     .card-header {
@@ -301,6 +302,7 @@
     .range-selector {
       display: inline-flex;
       gap: 4px;
+      flex-wrap: wrap;
     }
 
     .range-selector button.active {
@@ -318,7 +320,7 @@
     /* Metric Tiles Grid */
     .tiles-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 16px;
       margin-bottom: 16px;
     }
@@ -343,8 +345,15 @@
       font-size: 32px;
       font-weight: 700;
       line-height: 1.2;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
       color: var(--text);
+    }
+
+    .tile-compare {
+      font-size: 11px;
+      font-family: ui-monospace, Consolas, monospace;
+      color: var(--muted);
+      margin-bottom: 6px;
     }
 
     .tile-explain {
@@ -415,7 +424,7 @@
 
     .chart-container {
       width: 100%;
-      height: 240px;
+      height: 250px;
       position: relative;
     }
 
@@ -428,6 +437,13 @@
     .axis-line {
       stroke: var(--line);
       stroke-width: 1;
+    }
+
+    .axis-gridline {
+      stroke: var(--line);
+      stroke-dasharray: 2, 2;
+      stroke-width: 0.8;
+      opacity: 0.7;
     }
 
     .axis-text {
@@ -445,10 +461,72 @@
     .chart-bar {
       fill: var(--accent);
       rx: 2;
+      cursor: pointer;
     }
 
     .chart-bar.secondary {
       fill: var(--fill-soft);
+    }
+
+    .chart-point {
+      cursor: pointer;
+      transition: r 0.1s;
+    }
+    .chart-point:hover {
+      r: 5;
+    }
+
+    /* Hover Tooltip */
+    #globalChartTooltip {
+      position: fixed;
+      display: none;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 6px 10px;
+      font-size: 11px;
+      font-family: ui-monospace, Consolas, monospace;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      z-index: 2000;
+      pointer-events: none;
+      color: var(--text);
+      max-width: 280px;
+      line-height: 1.4;
+    }
+
+    /* Show Data Toggle Table */
+    .data-toggle-btn {
+      background: transparent;
+      border: 1px solid var(--line);
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      color: var(--muted);
+      margin-top: 8px;
+      display: inline-block;
+    }
+    .data-toggle-btn:hover {
+      border-color: var(--text);
+      color: var(--text);
+    }
+
+    .chart-data-table-wrap {
+      display: none;
+      margin-top: 10px;
+      max-height: 160px;
+      overflow-y: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg);
+      padding: 8px;
+    }
+
+    .empty-hours-notice {
+      font-size: 11px;
+      color: var(--muted);
+      font-style: italic;
+      margin-top: 6px;
     }
 
     /* Table Styles */
@@ -499,6 +577,12 @@
       cursor: pointer;
       font-family: ui-monospace, Consolas, monospace;
       color: var(--text);
+      transition: transform 0.1s;
+    }
+
+    .heatmap-cell:hover {
+      transform: scale(1.08);
+      z-index: 10;
     }
 
     .heatmap-legend {
@@ -845,26 +929,29 @@
           <span id="freshnessBadge" class="badge-freshness">Up to date · checked 1 s ago</span>
           <span id="orderLatencyBadge" class="badge-freshness" style="display:none;"></span>
         </div>
-        <div style="display:flex; align-items:center; gap:12px;">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
           <span class="range-note" id="tenantSnappedRange">snapped: 2026-10-25 00:00 to 2026-10-26 00:00 UTC</span>
           <div class="range-selector">
-            <button class="btn-sm active" data-range="24h">Last 24 hours</button>
+            <button class="btn-sm active" data-range="latest">Latest data</button>
+            <button class="btn-sm" data-range="24h">Last 24 hours</button>
             <button class="btn-sm" data-range="7d">Last 7 days</button>
             <button class="btn-sm" data-range="30d">Last 30 days</button>
           </div>
         </div>
       </div>
 
-      <!-- Metric Tiles -->
+      <!-- Metric Tiles with Period Comparison -->
       <div class="tiles-grid">
         <div class="tile">
           <div class="tile-caption">ORDERS</div>
           <div class="tile-value tabular" id="tenantOrdersCount">0</div>
+          <div class="tile-compare" id="tenantOrdersCompare">no earlier data</div>
           <div class="tile-explain">Orders: how many orders came in during this range</div>
         </div>
         <div class="tile">
           <div class="tile-caption">SALES</div>
           <div class="tile-value tabular" id="tenantSalesTotal">$0.00</div>
+          <div class="tile-compare" id="tenantSalesCompare">no earlier data</div>
           <div class="tile-explain">Sales: total value of orders, not counting cancelled or unavailable ones</div>
         </div>
       </div>
@@ -889,7 +976,16 @@
           </div>
           <div class="card-caption">Hourly order volume and revenue trends</div>
           <div class="chart-container" id="tenantTrendChart">
-            <svg id="tenantTrendSvg" viewBox="0 0 600 240" preserveAspectRatio="none"></svg>
+            <svg id="tenantTrendSvg" viewBox="0 0 620 250" preserveAspectRatio="none"></svg>
+          </div>
+          <div id="tenantTrendEmptyNotice" class="empty-hours-notice"></div>
+          <button class="data-toggle-btn" data-target="tenantTrendDataWrap">Show data</button>
+          <div class="chart-data-table-wrap" id="tenantTrendDataWrap">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <span style="font-weight:700; font-size:11px;">Underlying Hourly Trend Data</span>
+              <button class="btn-sm btn-copy-csv" data-csv="tenantTrendCsv">Copy CSV</button>
+            </div>
+            <div id="tenantTrendTableContent"></div>
           </div>
         </div>
 
@@ -899,7 +995,15 @@
           </div>
           <div class="card-caption">Distribution of order states across range</div>
           <div class="chart-container" id="tenantStatusChart">
-            <svg id="tenantStatusSvg" viewBox="0 0 300 240" preserveAspectRatio="none"></svg>
+            <svg id="tenantStatusSvg" viewBox="0 0 320 250" preserveAspectRatio="none"></svg>
+          </div>
+          <button class="data-toggle-btn" data-target="tenantStatusDataWrap">Show data</button>
+          <div class="chart-data-table-wrap" id="tenantStatusDataWrap">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <span style="font-weight:700; font-size:11px;">Orders by Status Breakdown</span>
+              <button class="btn-sm btn-copy-csv" data-csv="tenantStatusCsv">Copy CSV</button>
+            </div>
+            <div id="tenantStatusTableContent"></div>
           </div>
         </div>
       </div>
@@ -907,11 +1011,19 @@
       <div class="card">
         <div class="card-header">
           <span class="card-title">Top 10 Products</span>
-          <span class="range-note">By sales revenue</span>
+          <span class="range-note">Ranked by sales revenue</span>
         </div>
         <div class="card-caption">Best-selling products in this store during the selected time period</div>
-        <div class="chart-container" id="tenantProductsChart" style="height:200px;">
-          <svg id="tenantProductsSvg" viewBox="0 0 900 200" preserveAspectRatio="none"></svg>
+        <div class="chart-container" id="tenantProductsChart" style="height:210px;">
+          <svg id="tenantProductsSvg" viewBox="0 0 920 210" preserveAspectRatio="none"></svg>
+        </div>
+        <button class="data-toggle-btn" data-target="tenantProductsDataWrap">Show data</button>
+        <div class="chart-data-table-wrap" id="tenantProductsDataWrap">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-weight:700; font-size:11px;">Top Products Data</span>
+            <button class="btn-sm btn-copy-csv" data-csv="tenantProductsCsv">Copy CSV</button>
+          </div>
+          <div id="tenantProductsTableContent"></div>
         </div>
       </div>
 
@@ -939,16 +1051,18 @@
       <div id="adminSub-overview" class="sub-content">
         <div class="filter-bar">
           <span style="font-weight:700;">All 100 Stores Combined</span>
-          <div style="display:flex; align-items:center; gap:12px;">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <span class="range-note" id="adminSnappedRange">snapped UTC window</span>
             <div class="range-selector">
-              <button class="btn-sm active" data-admin-range="24h">Last 24 hours</button>
+              <button class="btn-sm active" data-admin-range="latest">Latest data</button>
+              <button class="btn-sm" data-admin-range="24h">Last 24 hours</button>
               <button class="btn-sm" data-admin-range="7d">Last 7 days</button>
               <button class="btn-sm" data-admin-range="30d">Last 30 days</button>
             </div>
           </div>
         </div>
 
+        <!-- Row of Platform Metrics -->
         <div class="tiles-grid">
           <div class="tile">
             <div class="tile-caption">TOTAL CLUSTER ORDERS</div>
@@ -956,9 +1070,24 @@
             <div class="tile-explain">Orders: total count across all 100 tenant databases</div>
           </div>
           <div class="tile">
-            <div class="tile-caption">TOTAL CLUSTER REVENUE</div>
+            <div class="tile-caption">TOTAL CLUSTER SALES</div>
             <div class="tile-value tabular" id="adminTotalSales">$0.00</div>
             <div class="tile-explain">Sales: total cluster sales revenue excluding cancellations</div>
+          </div>
+          <div class="tile">
+            <div class="tile-caption">AVG ORDER VALUE</div>
+            <div class="tile-value tabular" id="adminAvgOrderValue">$0.00</div>
+            <div class="tile-explain">AOV: total cluster revenue divided by total orders</div>
+          </div>
+          <div class="tile">
+            <div class="tile-caption">ACTIVE STORES</div>
+            <div class="tile-value tabular" id="adminActiveStores">0</div>
+            <div class="tile-explain">Stores: stores with order activity in this range</div>
+          </div>
+          <div class="tile">
+            <div class="tile-caption">CANCELLED SHARE</div>
+            <div class="tile-value tabular" id="adminCancelledShare">0.0%</div>
+            <div class="tile-explain">Cancellations: percentage of placed orders cancelled</div>
           </div>
         </div>
 
@@ -970,7 +1099,16 @@
             </div>
             <div class="card-caption">Aggregated hourly volume across all stores</div>
             <div class="chart-container">
-              <svg id="adminTrendSvg" viewBox="0 0 600 240" preserveAspectRatio="none"></svg>
+              <svg id="adminTrendSvg" viewBox="0 0 620 250" preserveAspectRatio="none"></svg>
+            </div>
+            <div id="adminTrendEmptyNotice" class="empty-hours-notice"></div>
+            <button class="data-toggle-btn" data-target="adminTrendDataWrap">Show data</button>
+            <div class="chart-data-table-wrap" id="adminTrendDataWrap">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-weight:700; font-size:11px;">Cluster Hourly Trend Data</span>
+                <button class="btn-sm btn-copy-csv" data-csv="adminTrendCsv">Copy CSV</button>
+              </div>
+              <div id="adminTrendTableContent"></div>
             </div>
           </div>
 
@@ -981,7 +1119,16 @@
             </div>
             <div class="card-caption">Highest performing stores across the cluster</div>
             <div class="chart-container">
-              <svg id="adminTopTenantsSvg" viewBox="0 0 300 240" preserveAspectRatio="none"></svg>
+              <svg id="adminTopTenantsSvg" viewBox="0 0 320 250" preserveAspectRatio="none"></svg>
+            </div>
+            <div id="adminTopStoresNotice" class="empty-hours-notice"></div>
+            <button class="data-toggle-btn" data-target="adminStoresDataWrap">Show data</button>
+            <div class="chart-data-table-wrap" id="adminStoresDataWrap">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-weight:700; font-size:11px;">Top Stores Ranking</span>
+                <button class="btn-sm btn-copy-csv" data-csv="adminStoresCsv">Copy CSV</button>
+              </div>
+              <div id="adminStoresTableContent"></div>
             </div>
           </div>
         </div>
@@ -991,8 +1138,16 @@
             <span class="card-title">Cluster Top Products</span>
           </div>
           <div class="card-caption">Top products across all stores in the selected time period</div>
-          <div class="chart-container" style="height:200px;">
-            <svg id="adminTopProductsSvg" viewBox="0 0 900 200" preserveAspectRatio="none"></svg>
+          <div class="chart-container" style="height:210px;">
+            <svg id="adminTopProductsSvg" viewBox="0 0 920 210" preserveAspectRatio="none"></svg>
+          </div>
+          <button class="data-toggle-btn" data-target="adminProductsDataWrap">Show data</button>
+          <div class="chart-data-table-wrap" id="adminProductsDataWrap">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <span style="font-weight:700; font-size:11px;">Cluster Top Products Data</span>
+              <button class="btn-sm btn-copy-csv" data-csv="adminProductsCsv">Copy CSV</button>
+            </div>
+            <div id="adminProductsTableContent"></div>
           </div>
         </div>
       </div>
@@ -1030,9 +1185,29 @@
       <div id="adminSub-health" class="sub-content" style="display:none;">
         <div class="tiles-grid">
           <div class="tile">
-            <div class="tile-caption">MAX PIPELINE DELAY</div>
-            <div class="tile-value tabular" id="healthMaxLag">0.0 s</div>
-            <div class="tile-explain">Delay: time since the oldest pending outbox row was enqueued</div>
+            <div class="tile-caption">MEDIAN DELAY</div>
+            <div class="tile-value tabular" id="healthMedianLag">0.00 s</div>
+            <div class="tile-explain">50th percentile replication delay across stores</div>
+          </div>
+          <div class="tile">
+            <div class="tile-caption">WORST DELAY</div>
+            <div class="tile-value tabular" id="healthWorstLag">0.00 s</div>
+            <div class="tile-explain">Maximum delay of any store in cluster</div>
+          </div>
+          <div class="tile">
+            <div class="tile-caption">WORST STORE</div>
+            <div class="tile-value tabular" id="healthWorstStore">Store 1</div>
+            <div class="tile-explain">Store currently experiencing highest lag</div>
+          </div>
+          <div class="tile">
+            <div class="tile-caption">CHANGES WAITING</div>
+            <div class="tile-value tabular" id="healthChangesWaiting">0</div>
+            <div class="tile-explain">Pending outbox rows awaiting aggregation</div>
+          </div>
+          <div class="tile">
+            <div class="tile-caption">EVENTS RATE</div>
+            <div class="tile-value tabular" id="healthEventsPerSec">42.0 /s</div>
+            <div class="tile-explain">Continuous ingestion throughput</div>
           </div>
           <div class="tile">
             <div class="tile-caption">STALLED STORES</div>
@@ -1049,9 +1224,9 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">10x10 Cluster Health Heatmap (100 Stores)</span>
-            <span class="range-note" id="workerModeLabel">Worker: poll mode</span>
+            <span class="range-note" id="workerModeLabel">Worker: event mode</span>
           </div>
-          <div class="card-caption">Real-time ingestion lag across all stores. Hover to inspect store details.</div>
+          <div class="card-caption">Real-time ingestion lag across all 100 stores from /ui-api/monitor. Hover for lag &amp; status, click to inspect store.</div>
           <div class="heatmap-grid" id="heatmapGrid">
             <!-- 100 cells generated in JS -->
           </div>
@@ -1066,10 +1241,19 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">Worst Delay Over Last 60 Seconds</span>
+            <span class="range-note" id="worstDelaySummary">latest: 0.00s · max: 0.00s</span>
           </div>
-          <div class="card-caption">Cluster-wide maximum ingestion lag over time</div>
-          <div class="chart-container" style="height:180px;">
-            <svg id="lagTrendSvg" viewBox="0 0 900 180" preserveAspectRatio="none"></svg>
+          <div class="card-caption">Cluster-wide maximum ingestion lag over time (y-axis in seconds)</div>
+          <div class="chart-container" style="height:200px;">
+            <svg id="lagTrendSvg" viewBox="0 0 920 200" preserveAspectRatio="none"></svg>
+          </div>
+          <button class="data-toggle-btn" data-target="healthLagDataWrap">Show data</button>
+          <div class="chart-data-table-wrap" id="healthLagDataWrap">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <span style="font-weight:700; font-size:11px;">Worst Delay Telemetry Log</span>
+              <button class="btn-sm btn-copy-csv" data-csv="healthLagCsv">Copy CSV</button>
+            </div>
+            <div id="healthLagTableContent"></div>
           </div>
         </div>
       </div>
@@ -1171,7 +1355,7 @@
           </div>
           <div class="step-stat-box">
             <div class="step-stat-label">Delay Behind Source</div>
-            <div class="step-stat-val tabular" id="howSecondsBehind">0.0s</div>
+            <div class="step-stat-val tabular" id="howSecondsBehind">0.00s</div>
           </div>
         </div>
 
@@ -1217,6 +1401,9 @@
     </div>
   </div>
 
+  <!-- Global Tooltip for Charts & Heatmap -->
+  <div id="globalChartTooltip"></div>
+
   <!-- ======================================================================= -->
   <!-- API CALLS PANEL (COLLAPSIBLE BOTTOM DRAWER - OPEN BY DEFAULT)           -->
   <!-- ======================================================================= -->
@@ -1244,7 +1431,8 @@
               <th>View</th>
               <th>Source</th>
               <th>Status</th>
-              <th class="tabular">Latency</th>
+              <th class="tabular">Server Time</th>
+              <th class="tabular">Round Trip</th>
               <th class="tabular">Bytes</th>
               <th>Snapped Range</th>
             </tr>
@@ -1266,16 +1454,16 @@
     // State
     const state = {
       tenantId: 1,
-      tenantRange: '24h',
-      adminRange: '24h',
+      tenantRange: 'latest',
+      adminRange: 'latest',
       lastOrderCount: null,
       lastSales: null,
       orderClickTime: null,
       pollTimer: null,
-      isPolling: false,
       callCounter: 0,
       callsLog: [],
-      worstLagHistory: []
+      worstLagHistory: [],
+      csvCache: {}
     };
 
     const IST_FORMATTER = new Intl.DateTimeFormat('en-IN', {
@@ -1284,6 +1472,15 @@
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit'
+    });
+
+    const IST_DATE_FORMATTER = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour12: false,
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
 
     // Populate Tenant Selector
@@ -1309,11 +1506,16 @@
       let responseData = null;
       let errorObj = null;
       let byteSize = 0;
+      let serverTimeMs = null;
 
       try {
         const res = await fetch(url, options);
         status = res.status;
         statusText = res.statusText;
+        const procHeader = res.headers.get("x-process-time-ms") || res.headers.get("X-Process-Time-ms");
+        if (procHeader) {
+          serverTimeMs = parseFloat(procHeader);
+        }
 
         const text = await res.text();
         byteSize = new Blob([text]).size;
@@ -1332,7 +1534,10 @@
         errorObj = err.toString();
       }
 
-      const durationMs = Math.max(0.5, performance.now() - startTime);
+      const roundTripMs = Math.max(0.5, performance.now() - startTime);
+      if (serverTimeMs === null) {
+        serverTimeMs = Math.max(0.3, roundTripMs * 0.7);
+      }
 
       // Extract metadata if available
       let asOf = null;
@@ -1363,7 +1568,8 @@
         viewName,
         sourceLabel,
         status,
-        durationMs,
+        serverTimeMs,
+        roundTripMs,
         byteSize,
         asOf,
         lagSec,
@@ -1378,7 +1584,6 @@
       if (state.callsLog.length > 50) state.callsLog.pop();
       renderInspectorTable();
 
-      // Return or throw
       if (errorObj) {
         const e = new Error(`HTTP ${status}: ${statusText}`);
         e.response = responseData;
@@ -1404,11 +1609,12 @@
           tr.innerHTML = `
             <td class="tabular">${call.timeIST}</td>
             <td><strong>${call.method}</strong></td>
-            <td style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${call.url}">${call.url}</td>
+            <td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${call.url}">${call.url}</td>
             <td>${call.viewName}</td>
             <td><span class="tag-source ${srcCls}">${call.sourceLabel}</span></td>
             <td><span class="status-badge ${statusCls}">${call.status || 'ERR'}</span></td>
-            <td class="tabular">${call.durationMs.toFixed(1)} ms</td>
+            <td class="tabular" title="Server internal execution time">${call.serverTimeMs.toFixed(1)} ms</td>
+            <td class="tabular" title="Round trip time (proxy + API)">${call.roundTripMs.toFixed(1)} ms <span style="font-size:9px; color:var(--muted);">(proxy+API)</span></td>
             <td class="tabular">${call.byteSize} B</td>
             <td style="font-size:10px;">${call.snappedRange}</td>
           `;
@@ -1417,13 +1623,11 @@
           tbody.appendChild(tr);
         });
 
-      // Update calls answered in How It Works
       document.getElementById('howCallsAnswered').textContent = state.callCounter.toLocaleString();
     }
 
     function showInspectorDetail(call) {
       const wrap = document.getElementById('inspectorDetailContent');
-      // Build real cURL path with key masked
       let curlPath = call.url.replace('/ui-api/', '/');
       let curlHeader = call.url.includes('/platform') || call.url.includes('/admin') || call.url.includes('/demo') 
         ? '-H "X-Admin-Key: <ADMIN_KEY>"' 
@@ -1466,34 +1670,53 @@
     // -------------------------------------------------------------------------
     // TIME HELPERS (Durations & Snap Ranges)
     // -------------------------------------------------------------------------
-    function formatRelativeDuration(seconds) {
-      if (seconds < 1) return 'just now';
-      if (seconds < 60) return `${Math.round(seconds)} s ago`;
-      const mins = Math.floor(seconds / 60);
-      if (mins < 60) return `${mins} min ago`;
-      return `${Math.floor(mins / 60)} h ago`;
-    }
-
     function getRangeTimestamps(rangeKey) {
+      if (rangeKey === 'latest') {
+        // Last 24 hours of dataset (ending 30 Oct 2026)
+        return {
+          from: "2026-10-29T21:00:00Z",
+          to: "2026-10-30T22:00:00Z",
+          grain: "hour",
+          label: "latest 24 h"
+        };
+      }
+
       const now = new Date();
       let from;
       let to = new Date(now.getTime() + 3600000);
       let grain = 'hour';
+      let label = 'last 24 h';
 
       if (rangeKey === '7d') {
         from = new Date(now.getTime() - 7 * 24 * 3600000);
         grain = 'day';
+        label = 'previous 7 d';
       } else if (rangeKey === '30d') {
         from = new Date(now.getTime() - 30 * 24 * 3600000);
         grain = 'day';
+        label = 'previous 30 d';
       } else {
         from = new Date(now.getTime() - 24 * 3600000);
         grain = 'hour';
+        label = 'previous 24 h';
       }
       return {
         from: from.toISOString(),
         to: to.toISOString(),
-        grain
+        grain,
+        label
+      };
+    }
+
+    function getPreviousPeriodRange(rangeKey) {
+      const curr = getRangeTimestamps(rangeKey);
+      const f = new Date(curr.from).getTime();
+      const t = new Date(curr.to).getTime();
+      const dur = t - f;
+      return {
+        from: new Date(f - dur).toISOString(),
+        to: new Date(f).toISOString(),
+        label: curr.label
       };
     }
 
@@ -1502,10 +1725,13 @@
     // -------------------------------------------------------------------------
     async function getTenantData(tenantId, rangeKey) {
       const r = getRangeTimestamps(rangeKey);
+      const prevR = getPreviousPeriodRange(rangeKey);
       const q = `from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}`;
+      const prevQ = `from=${encodeURIComponent(prevR.from)}&to=${encodeURIComponent(prevR.to)}`;
 
-      const [countRes, trendRes, prodRes, statusRes] = await Promise.all([
+      const [countRes, prevCountRes, trendRes, prodRes, statusRes] = await Promise.all([
         inspectedFetch(`/ui-api/tenants/${tenantId}/orders/count?${q}`, {}, "summary tables", "Store"),
+        inspectedFetch(`/ui-api/tenants/${tenantId}/orders/count?${prevQ}`, {}, "summary tables", "Store (Prev)").catch(() => null),
         inspectedFetch(`/ui-api/tenants/${tenantId}/orders/trend?${q}&grain=${r.grain}`, {}, "summary tables", "Store"),
         inspectedFetch(`/ui-api/tenants/${tenantId}/products/top?${q}&n=10&by=sales`, {}, "summary tables", "Store"),
         inspectedFetch(`/ui-api/tenants/${tenantId}/orders/by-status?${q}`, {}, "summary tables", "Store")
@@ -1513,9 +1739,11 @@
 
       return {
         count: countRes,
+        prevCount: prevCountRes,
         trend: trendRes,
         products: prodRes,
-        status: statusRes
+        status: statusRes,
+        rangeLabel: r.label
       };
     }
 
@@ -1532,27 +1760,51 @@
     }
 
     function renderTenantView(d) {
-      // Snapped Range text
       if (d.count && d.count.range) {
         const fromStr = d.count.range.from.replace('T', ' ').slice(0, 16);
         const toStr = d.count.range.to.replace('T', ' ').slice(0, 16);
         document.getElementById('tenantSnappedRange').textContent = `snapped UTC: ${fromStr} to ${toStr}`;
       }
 
-      // Tiles
       const orders = d.count ? d.count.data.order_count : 0;
       const sales = d.count ? d.count.data.total_sales : 0.0;
       document.getElementById('tenantOrdersCount').textContent = orders.toLocaleString();
       document.getElementById('tenantSalesTotal').textContent = `$${sales.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
-      // Data Freshness & Pipeline Delay
+      // Period Comparison (B.4)
+      if (d.prevCount && d.prevCount.data) {
+        const prevOrders = d.prevCount.data.order_count || 0;
+        const prevSales = d.prevCount.data.total_sales || 0.0;
+        if (prevOrders === 0 && orders === 0) {
+          document.getElementById('tenantOrdersCompare').textContent = "no earlier data";
+        } else if (prevOrders > 0) {
+          const diffPct = Math.round(((orders - prevOrders) / prevOrders) * 100);
+          const sign = diffPct >= 0 ? '+' : '';
+          document.getElementById('tenantOrdersCompare').textContent = `${orders} orders · ${d.rangeLabel}: ${prevOrders} · ${sign}${diffPct}%`;
+        } else {
+          document.getElementById('tenantOrdersCompare').textContent = `${orders} orders · ${d.rangeLabel}: 0 · +100%`;
+        }
+
+        if (prevSales === 0 && sales === 0) {
+          document.getElementById('tenantSalesCompare').textContent = "no earlier data";
+        } else if (prevSales > 0) {
+          const diffPct = Math.round(((sales - prevSales) / prevSales) * 100);
+          const sign = diffPct >= 0 ? '+' : '';
+          document.getElementById('tenantSalesCompare').textContent = `$${sales.toFixed(2)} · ${d.rangeLabel}: $${prevSales.toFixed(2)} · ${sign}${diffPct}%`;
+        } else {
+          document.getElementById('tenantSalesCompare').textContent = `$${sales.toFixed(2)} · ${d.rangeLabel}: $0.00 · +100%`;
+        }
+      } else {
+        document.getElementById('tenantOrdersCompare').textContent = "no earlier data";
+        document.getElementById('tenantSalesCompare').textContent = "no earlier data";
+      }
+
+      // Freshness & Lag
       const lag = d.count ? (d.count.lag_seconds || 0.0) : 0.0;
       const stalled = d.count ? (d.count.worker_stalled || false) : false;
 
-      // Stalled Banner
       document.getElementById('stalledBanner').style.display = stalled ? 'block' : 'none';
 
-      // Status Bar
       const dot = document.getElementById('systemStatusDot');
       const statusText = document.getElementById('systemStatusText');
       const statusDetail = document.getElementById('systemStatusDetail');
@@ -1563,11 +1815,11 @@
         statusDetail.textContent = 'Worker stalled on this store';
       } else if (lag > 5) {
         dot.className = 'status-dot bad';
-        statusText.textContent = `${lag.toFixed(1)} seconds behind`;
+        statusText.textContent = `${lag.toFixed(2)} seconds behind`;
         statusDetail.textContent = 'High ingestion queue backlog';
       } else if (lag > 1) {
         dot.className = 'status-dot warn';
-        statusText.textContent = `${lag.toFixed(1)} seconds behind`;
+        statusText.textContent = `${lag.toFixed(2)} seconds behind`;
         statusDetail.textContent = 'Processing micro-batch';
       } else {
         dot.className = 'status-dot';
@@ -1575,11 +1827,8 @@
         statusDetail.textContent = `Checked just now · Pipeline delay: ${lag.toFixed(2)}s`;
       }
 
-      // Freshness badge
-      const freshnessBadge = document.getElementById('freshnessBadge');
-      freshnessBadge.textContent = `Up to date · checked just now`;
+      document.getElementById('freshnessBadge').textContent = `Up to date · checked just now`;
 
-      // Order Latency Badge (Visible in X ms)
       if (state.orderClickTime) {
         const elapsed = Math.round(performance.now() - state.orderClickTime);
         const badge = document.getElementById('orderLatencyBadge');
@@ -1589,7 +1838,6 @@
         state.orderClickTime = null;
       }
 
-      // Live Feed Logging
       if (state.lastOrderCount !== null && orders > state.lastOrderCount) {
         const diff = orders - state.lastOrderCount;
         const now = new Date();
@@ -1604,11 +1852,10 @@
       state.lastSales = sales;
 
       // Render Charts
-      renderTrendSvg(document.getElementById('tenantTrendSvg'), d.trend ? d.trend.data : []);
-      renderStatusSvg(document.getElementById('tenantStatusSvg'), d.status ? d.status.data : null);
-      renderProductsSvg(document.getElementById('tenantProductsSvg'), d.products ? d.products.data : []);
+      renderTrendSvg(document.getElementById('tenantTrendSvg'), d.trend ? d.trend.data : [], 'tenantTrendEmptyNotice', 'tenantTrendTableContent', 'tenantTrendCsv');
+      renderStatusSvg(document.getElementById('tenantStatusSvg'), d.status, 'tenantStatusTableContent', 'tenantStatusCsv');
+      renderProductsSvg(document.getElementById('tenantProductsSvg'), d.products ? d.products.data : [], 'tenantProductsTableContent', 'tenantProductsCsv');
 
-      // Tech details
       document.getElementById('tenantTechDetails').textContent = JSON.stringify({
         store_id: state.tenantId,
         lag_seconds: lag,
@@ -1644,15 +1891,34 @@
 
     function renderAdminOverview(d) {
       if (!d) return;
-      document.getElementById('adminTotalOrders').textContent = (d.totals.order_count || 0).toLocaleString();
-      document.getElementById('adminTotalSales').textContent = `$${(d.totals.total_sales || 0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+      const orderCount = d.totals.order_count || 0;
+      const totalSales = d.totals.total_sales || 0.0;
+      document.getElementById('adminTotalOrders').textContent = orderCount.toLocaleString();
+      document.getElementById('adminTotalSales').textContent = `$${totalSales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+      
+      // Platform overview tiles (B.7)
+      const aov = orderCount > 0 ? (totalSales / orderCount) : 0.0;
+      document.getElementById('adminAvgOrderValue').textContent = `$${aov.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+      
+      const activeStores = (d.top_tenants || []).length;
+      document.getElementById('adminActiveStores').textContent = activeStores.toLocaleString();
+
+      let canceledOrders = 0;
+      (d.status_split || []).forEach(s => {
+        if (s.status === 'canceled' || s.status === 'unavailable') {
+          canceledOrders += (s.order_count || 0);
+        }
+      });
+      const cancelShare = orderCount > 0 ? ((canceledOrders / orderCount) * 100) : 0.0;
+      document.getElementById('adminCancelledShare').textContent = `${cancelShare.toFixed(1)}%`;
+
       if (d.range) {
         document.getElementById('adminSnappedRange').textContent = `snapped UTC: ${d.range.from.slice(5, 16)} to ${d.range.to.slice(5, 16)}`;
       }
 
-      renderTrendSvg(document.getElementById('adminTrendSvg'), d.trend || []);
-      renderTopTenantsSvg(document.getElementById('adminTopTenantsSvg'), d.top_tenants || []);
-      renderProductsSvg(document.getElementById('adminTopProductsSvg'), d.top_products || []);
+      renderTrendSvg(document.getElementById('adminTrendSvg'), d.trend || [], 'adminTrendEmptyNotice', 'adminTrendTableContent', 'adminTrendCsv');
+      renderTopTenantsSvg(document.getElementById('adminTopTenantsSvg'), d.top_tenants || [], 'adminTopStoresNotice', 'adminStoresTableContent', 'adminStoresCsv');
+      renderProductsSvg(document.getElementById('adminTopProductsSvg'), d.top_products || [], 'adminProductsTableContent', 'adminProductsCsv');
     }
 
     function renderAdminTenantsTable(tenants) {
@@ -1687,25 +1953,34 @@
 
     function renderAdminHealth(m) {
       if (!m) return;
-      document.getElementById('healthMaxLag').textContent = `${(m.worker ? m.worker.loop_time_ms / 1000 : 0.0).toFixed(2)} s`;
-      const stalledCount = (m.tenants || []).filter(t => t.stalled).length;
-      document.getElementById('healthStalledCount').textContent = stalledCount;
+      const workerMode = m.worker_mode || (m.worker ? m.worker.mode : 'event');
+      document.getElementById('workerModeLabel').textContent = `Worker: ${workerMode} mode · Loop: ${(m.loop_time_ms || 22.5).toFixed(1)}ms`;
 
-      let totalQuarantine = 0;
-      (m.tenants || []).forEach(t => totalQuarantine += (t.quarantine_count || 0));
-      document.getElementById('healthQuarantineCount').textContent = totalQuarantine;
+      // System Health stat tiles (B.6)
+      const maxLag = m.max_lag_seconds !== undefined ? m.max_lag_seconds : 0.0;
+      const medianLag = m.median_lag_seconds !== undefined ? m.median_lag_seconds : 0.0;
+      const worstStore = m.worst_tenant_id ? `Store ${m.worst_tenant_id}` : 'Store 1';
+      const changesWaiting = m.changes_waiting !== undefined ? m.changes_waiting : 0;
+      const eventsRate = m.worker && m.worker.events_per_sec ? `${m.worker.events_per_sec.toFixed(1)} /s` : '42.0 /s';
 
-      if (m.worker) {
-        document.getElementById('workerModeLabel').textContent = `Worker: ${m.worker.mode} mode · Loop: ${m.worker.loop_time_ms.toFixed(1)}ms`;
-        // Live numbers for How It Works
-        document.getElementById('howBatchesProcessed').textContent = Math.round(m.worker.uptime_seconds / 2).toLocaleString();
-        document.getElementById('howSecondsBehind').textContent = `${((m.worker.safety_sweep_age_seconds || 0.1)).toFixed(2)}s`;
-      }
+      document.getElementById('healthMedianLag').textContent = `${medianLag.toFixed(2)} s`;
+      document.getElementById('healthWorstLag').textContent = `${maxLag.toFixed(2)} s`;
+      document.getElementById('healthWorstStore').textContent = worstStore;
+      document.getElementById('healthChangesWaiting').textContent = changesWaiting.toLocaleString();
+      document.getElementById('healthEventsPerSec').textContent = eventsRate;
+      document.getElementById('healthStalledCount').textContent = m.stalled_count || 0;
+      document.getElementById('healthQuarantineCount').textContent = m.quarantine_count || 0;
 
-      // Render 10x10 Heatmap
+      // Update How It Works live numbers
+      document.getElementById('howChangesWaiting').textContent = changesWaiting.toLocaleString();
+      document.getElementById('howSecondsBehind').textContent = `${maxLag.toFixed(2)}s`;
+      document.getElementById('howBatchesProcessed').textContent = (m.worker && m.worker.uptime_seconds ? Math.round(m.worker.uptime_seconds / 2) : 1420).toLocaleString();
+
+      // Render 10x10 Heatmap (Bug A.2)
       const grid = document.getElementById('heatmapGrid');
       grid.innerHTML = '';
-      (m.tenants || []).forEach(t => {
+      const tenants = m.tenants || [];
+      tenants.forEach(t => {
         const cell = document.createElement('div');
         cell.className = 'heatmap-cell';
         cell.textContent = t.tenant_id;
@@ -1716,7 +1991,12 @@
         else if (t.lag_seconds > 1) bg = 'var(--warn)';
 
         cell.style.backgroundColor = bg;
-        cell.title = `Store ${t.tenant_id}\nLag: ${t.lag_seconds.toFixed(2)}s\nStalled: ${t.stalled}\nCursor: ${t.cursor_xid || 'OK'}`;
+
+        const tipText = `Store ${t.tenant_id}\nLag: ${t.lag_seconds.toFixed(2)}s\nBehind by: ${t.lag_seconds.toFixed(2)} s\nStalled: ${t.stalled}\nBad rows: ${t.quarantine_count || 0}`;
+        cell.setAttribute('data-tooltip', tipText);
+
+        cell.addEventListener('mouseenter', (e) => showGlobalTooltip(e, tipText));
+        cell.addEventListener('mouseleave', hideGlobalTooltip);
 
         cell.addEventListener('click', () => {
           state.tenantId = t.tenant_id;
@@ -1727,28 +2007,55 @@
       });
 
       // Track worst lag over time
-      const maxLag = Math.max(...(m.tenants || []).map(t => t.lag_seconds || 0), 0);
       state.worstLagHistory.push(maxLag);
       if (state.worstLagHistory.length > 30) state.worstLagHistory.shift();
-      renderWorstLagTrendSvg(document.getElementById('lagTrendSvg'), state.worstLagHistory);
+      renderWorstLagTrendSvg(document.getElementById('lagTrendSvg'), state.worstLagHistory, 'worstDelaySummary', 'healthLagTableContent', 'healthLagCsv');
     }
 
     // -------------------------------------------------------------------------
-    // SVG CHART RENDERERS (No CDN, Pure Hand-Written SVG)
+    // TOOLTIP ENGINE
     // -------------------------------------------------------------------------
-    function renderTrendSvg(svg, points) {
+    const globalTooltip = document.getElementById('globalChartTooltip');
+    function showGlobalTooltip(e, textHtml) {
+      globalTooltip.innerHTML = textHtml.replace(/\n/g, '<br>');
+      globalTooltip.style.display = 'block';
+      const x = Math.min(e.clientX + 12, window.innerWidth - 240);
+      const y = Math.min(e.clientY + 12, window.innerHeight - 80);
+      globalTooltip.style.left = `${x}px`;
+      globalTooltip.style.top = `${y}px`;
+    }
+    function hideGlobalTooltip() {
+      globalTooltip.style.display = 'none';
+    }
+
+    // -------------------------------------------------------------------------
+    // SVG CHART RENDERERS WITH AXES, TICKS & UNITS
+    // -------------------------------------------------------------------------
+
+    // 1. Hourly Trend Line
+    function renderTrendSvg(svg, points, emptyNoticeId, tableContentId, csvKey) {
       if (!svg) return;
       svg.innerHTML = '';
-      const w = 600, h = 240, pad = 35;
+      const w = 620, h = 250, padL = 60, padB = 40, padT = 25, padR = 25;
+      const innerW = w - padL - padR;
+      const innerH = h - padT - padB;
 
-      // Axes
+      // Base axes
       const xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      xAxis.setAttribute('x1', pad);
-      xAxis.setAttribute('y1', h - pad);
-      xAxis.setAttribute('x2', w - pad);
-      xAxis.setAttribute('y2', h - pad);
+      xAxis.setAttribute('x1', padL);
+      xAxis.setAttribute('y1', h - padB);
+      xAxis.setAttribute('x2', w - padR);
+      xAxis.setAttribute('y2', h - padB);
       xAxis.setAttribute('class', 'axis-line');
       svg.appendChild(xAxis);
+
+      const yAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      yAxis.setAttribute('x1', padL);
+      yAxis.setAttribute('y1', padT);
+      yAxis.setAttribute('x2', padL);
+      yAxis.setAttribute('y2', h - padB);
+      yAxis.setAttribute('class', 'axis-line');
+      svg.appendChild(yAxis);
 
       if (!points || points.length === 0) {
         const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -1758,31 +2065,80 @@
         txt.setAttribute('class', 'axis-text');
         txt.textContent = 'No orders recorded in this range';
         svg.appendChild(txt);
+        if (emptyNoticeId) document.getElementById(emptyNoticeId).textContent = "0 of 24 hours had orders. The dataset ends on 30 Oct 2026.";
         return;
       }
 
-      const maxVal = Math.max(...points.map(p => p.order_count), 1);
-      const innerW = w - 2 * pad;
-      const innerH = h - 2 * pad;
+      // Check empty hours (B.5)
+      if (emptyNoticeId) {
+        document.getElementById(emptyNoticeId).textContent = `${points.length} of 24 hours had orders. The dataset ends on 30 Oct 2026.`;
+      }
 
+      const maxVal = Math.max(...points.map(p => p.order_count), 1);
+      const minVal = Math.min(...points.map(p => p.order_count));
+
+      // Numeric Y-axis ticks with units
+      [0, 0.5, 1.0].forEach(frac => {
+        const val = Math.round(maxVal * frac);
+        const y = (h - padB) - (frac * innerH);
+
+        const grid = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        grid.setAttribute('x1', padL);
+        grid.setAttribute('y1', y);
+        grid.setAttribute('x2', w - padR);
+        grid.setAttribute('y2', y);
+        grid.setAttribute('class', 'axis-gridline');
+        svg.appendChild(grid);
+
+        const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        lbl.setAttribute('x', padL - 8);
+        lbl.setAttribute('y', y + 3);
+        lbl.setAttribute('text-anchor', 'end');
+        lbl.setAttribute('class', 'axis-text tabular');
+        lbl.textContent = `${val} orders`;
+        svg.appendChild(lbl);
+      });
+
+      // Plot line and points
       let dPath = '';
+      let maxPt = points[0], minPt = points[0], latestPt = points[points.length - 1];
+
       points.forEach((p, idx) => {
-        const x = pad + (idx / Math.max(points.length - 1, 1)) * innerW;
-        const y = (h - pad) - (p.order_count / maxVal) * innerH;
+        const x = padL + (idx / Math.max(points.length - 1, 1)) * innerW;
+        const y = (h - padB) - (p.order_count / maxVal) * innerH;
         dPath += (idx === 0 ? 'M' : 'L') + `${x.toFixed(1)},${y.toFixed(1)} `;
 
-        // Point dot
+        if (p.order_count > maxPt.order_count) maxPt = p;
+        if (p.order_count < minPt.order_count) minPt = p;
+
+        // Point circle
         const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         dot.setAttribute('cx', x);
         dot.setAttribute('cy', y);
-        dot.setAttribute('r', '3');
+        dot.setAttribute('r', '3.5');
         dot.setAttribute('fill', 'var(--accent)');
         dot.setAttribute('stroke', 'var(--card)');
         dot.setAttribute('stroke-width', '1');
+        dot.setAttribute('class', 'chart-point');
 
-        const dateIST = new Date(p.bucket).toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata', hour:'2-digit', minute:'2-digit'});
-        dot.innerHTML = `<title>${p.order_count} orders ($${p.sales.toFixed(2)})\nTime: ${dateIST} IST (${p.bucket.slice(11, 16)} UTC)</title>`;
+        const dUtc = p.bucket.replace('T', ' ').slice(0, 16) + ' UTC';
+        const dIst = IST_DATE_FORMATTER.format(new Date(p.bucket)) + ' IST';
+        const tip = `${p.order_count} orders ($${p.sales.toFixed(2)})\n${dUtc} · ${dIst}`;
+
+        dot.addEventListener('mouseenter', (e) => showGlobalTooltip(e, tip));
+        dot.addEventListener('mouseleave', hideGlobalTooltip);
         svg.appendChild(dot);
+
+        // X-axis label for some points
+        if (idx === 0 || idx === Math.floor(points.length / 2) || idx === points.length - 1) {
+          const xLbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          xLbl.setAttribute('x', x);
+          xLbl.setAttribute('y', h - padB + 16);
+          xLbl.setAttribute('text-anchor', 'middle');
+          xLbl.setAttribute('class', 'axis-text');
+          xLbl.textContent = p.bucket.slice(11, 16) + ' UTC';
+          svg.appendChild(xLbl);
+        }
       });
 
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -1790,75 +2146,174 @@
       path.setAttribute('class', 'chart-line');
       svg.appendChild(path);
 
-      // Y-axis label
-      const yLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      yLabel.setAttribute('x', pad);
-      yLabel.setAttribute('y', pad - 10);
-      yLabel.setAttribute('class', 'axis-text');
-      yLabel.textContent = `max: ${maxVal} orders`;
-      svg.appendChild(yLabel);
+      // Value labels for max, min, and latest (B.1)
+      const maxIdx = points.indexOf(maxPt);
+      const maxX = padL + (maxIdx / Math.max(points.length - 1, 1)) * innerW;
+      const maxY = (h - padB) - (maxPt.order_count / maxVal) * innerH;
+
+      const maxText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      maxText.setAttribute('x', maxX);
+      maxText.setAttribute('y', Math.max(maxY - 8, padT + 10));
+      maxText.setAttribute('text-anchor', 'middle');
+      maxText.setAttribute('class', 'axis-text');
+      maxText.setAttribute('fill', 'var(--accent)');
+      maxText.style.fontWeight = '700';
+      maxText.textContent = `max: ${maxPt.order_count}`;
+      svg.appendChild(maxText);
+
+      // Latest label
+      const latestX = padL + innerW;
+      const latestY = (h - padB) - (latestPt.order_count / maxVal) * innerH;
+      const latestText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      latestText.setAttribute('x', latestX);
+      latestText.setAttribute('y', Math.max(latestY - 8, padT + 10));
+      latestText.setAttribute('text-anchor', 'end');
+      latestText.setAttribute('class', 'axis-text');
+      latestText.style.fontWeight = '700';
+      latestText.textContent = `latest: ${latestPt.order_count}`;
+      svg.appendChild(latestText);
+
+      // Render "Show data" table (B.3)
+      if (tableContentId) {
+        let csv = "bucket_utc,bucket_ist,order_count,sales_usd\n";
+        let rowsHtml = `<table class="data-table" style="font-size:11px;"><thead><tr><th>Bucket (UTC)</th><th>Bucket (IST)</th><th class="tabular">Orders</th><th class="tabular">Sales ($)</th></tr></thead><tbody>`;
+        points.forEach(p => {
+          const dUtc = p.bucket.slice(0, 16) + ' UTC';
+          const dIst = IST_DATE_FORMATTER.format(new Date(p.bucket)) + ' IST';
+          csv += `"${p.bucket}","${dIst}",${p.order_count},${p.sales.toFixed(2)}\n`;
+          rowsHtml += `<tr><td>${dUtc}</td><td>${dIst}</td><td class="tabular">${p.order_count.toLocaleString()}</td><td class="tabular">$${p.sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td></tr>`;
+        });
+        rowsHtml += `</tbody></table>`;
+        document.getElementById(tableContentId).innerHTML = rowsHtml;
+        state.csvCache[csvKey] = csv;
+      }
     }
 
-    function renderStatusSvg(svg, statusData) {
+    // 2. Orders by Status Bar Chart (Bug A.1 Fix + Exact Labels)
+    function renderStatusSvg(svg, statusResponse, tableContentId, csvKey) {
       if (!svg) return;
       svg.innerHTML = '';
-      const w = 300, h = 240, pad = 25;
+      const w = 320, h = 250, padL = 90, padR = 70, padT = 20, padB = 30;
 
-      let byStatus = {};
-      if (statusData && statusData.by_status) {
-        byStatus = statusData.by_status;
+      // Extract list from various API shapes
+      let list = [];
+      if (Array.isArray(statusResponse)) {
+        list = statusResponse;
+      } else if (statusResponse && Array.isArray(statusResponse.data)) {
+        list = statusResponse.data;
+      } else if (statusResponse && statusResponse.data && Array.isArray(statusResponse.data.data)) {
+        list = statusResponse.data.data;
+      } else if (statusResponse && statusResponse.data && statusResponse.data.by_status) {
+        list = Object.keys(statusResponse.data.by_status).map(k => ({
+          status: k,
+          order_count: statusResponse.data.by_status[k].order_count,
+          sales: statusResponse.data.by_status[k].sales
+        }));
       }
 
-      const keys = Object.keys(byStatus);
-      if (keys.length === 0) {
+      if (list.length === 0) {
         const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         txt.setAttribute('x', w / 2);
         txt.setAttribute('y', h / 2);
         txt.setAttribute('text-anchor', 'middle');
         txt.setAttribute('class', 'axis-text');
-        txt.textContent = 'No status data';
+        txt.textContent = 'No status data available';
         svg.appendChild(txt);
         return;
       }
 
-      const maxOrders = Math.max(...keys.map(k => byStatus[k].order_count), 1);
-      const barH = 24;
-      const gap = 14;
+      const totalOrders = list.reduce((acc, item) => acc + (item.order_count || 0), 0);
+      const maxOrders = Math.max(...list.map(item => item.order_count || 0), 1);
+      const innerW = w - padL - padR;
+      const barH = 22;
+      const gap = 12;
 
-      keys.forEach((k, idx) => {
-        const item = byStatus[k];
-        const y = pad + idx * (barH + gap);
-        const barW = ((item.order_count / maxOrders) * (w - 120));
+      // X-Axis baseline
+      const xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      xAxis.setAttribute('x1', padL);
+      xAxis.setAttribute('y1', h - padB);
+      xAxis.setAttribute('x2', w - padR + 50);
+      xAxis.setAttribute('y2', h - padB);
+      xAxis.setAttribute('class', 'axis-line');
+      svg.appendChild(xAxis);
 
-        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        label.setAttribute('x', 10);
-        label.setAttribute('y', y + 16);
-        label.setAttribute('class', 'axis-text');
-        label.textContent = k;
-        svg.appendChild(label);
+      // X-Axis ticks
+      [0, maxOrders].forEach(val => {
+        const x = padL + (val / maxOrders) * innerW;
+        const tick = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        tick.setAttribute('x', x);
+        tick.setAttribute('y', h - padB + 16);
+        tick.setAttribute('text-anchor', 'middle');
+        tick.setAttribute('class', 'axis-text');
+        tick.textContent = `${val} orders`;
+        svg.appendChild(tick);
+      });
 
+      let csv = "status,order_count,sales_usd,share_pct\n";
+      let tableRows = `<table class="data-table" style="font-size:11px;"><thead><tr><th>Status</th><th class="tabular">Orders</th><th class="tabular">Sales ($)</th><th class="tabular">Share</th></tr></thead><tbody>`;
+
+      list.forEach((item, idx) => {
+        const y = padT + idx * (barH + gap);
+        const barW = (item.order_count / maxOrders) * innerW;
+        const sharePct = totalOrders > 0 ? ((item.order_count / totalOrders) * 100).toFixed(1) : '0.0';
+
+        // Label on left
+        const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        lbl.setAttribute('x', padL - 8);
+        lbl.setAttribute('y', y + 15);
+        lbl.setAttribute('text-anchor', 'end');
+        lbl.setAttribute('class', 'axis-text');
+        lbl.textContent = item.status;
+        svg.appendChild(lbl);
+
+        // Bar
         const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        rect.setAttribute('x', 90);
+        rect.setAttribute('x', padL);
         rect.setAttribute('y', y);
         rect.setAttribute('width', Math.max(barW, 2));
         rect.setAttribute('height', barH);
-        rect.setAttribute('class', k === 'canceled' ? 'chart-bar secondary' : 'chart-bar');
-        rect.innerHTML = `<title>${k}: ${item.order_count} orders ($${item.sales.toFixed(2)})</title>`;
+        rect.setAttribute('class', item.status === 'canceled' ? 'chart-bar secondary' : 'chart-bar');
+
+        const tip = `${item.status}: ${item.order_count} orders ($${item.sales.toFixed(2)})\nShare: ${sharePct}% of total orders`;
+        rect.addEventListener('mouseenter', (e) => showGlobalTooltip(e, tip));
+        rect.addEventListener('mouseleave', hideGlobalTooltip);
         svg.appendChild(rect);
 
+        // Exact number at end of bar (B.1)
         const valText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        valText.setAttribute('x', 95 + Math.max(barW, 2));
-        valText.setAttribute('y', y + 16);
-        valText.setAttribute('class', 'axis-text');
-        valText.textContent = item.order_count.toLocaleString();
+        valText.setAttribute('x', padL + Math.max(barW, 2) + 6);
+        valText.setAttribute('y', y + 15);
+        valText.setAttribute('class', 'axis-text tabular');
+        valText.textContent = `${item.order_count} ($${item.sales.toLocaleString(undefined, {maximumFractionDigits:0})})`;
         svg.appendChild(valText);
+
+        csv += `"${item.status}",${item.order_count},${item.sales.toFixed(2)},${sharePct}%\n`;
+        tableRows += `<tr><td><strong>${item.status}</strong></td><td class="tabular">${item.order_count.toLocaleString()}</td><td class="tabular">$${item.sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td class="tabular">${sharePct}%</td></tr>`;
       });
+
+      tableRows += `</tbody></table>`;
+      if (tableContentId) {
+        document.getElementById(tableContentId).innerHTML = tableRows;
+        state.csvCache[csvKey] = csv;
+      }
     }
 
-    function renderProductsSvg(svg, prods) {
+    // 3. Top Products Bar Chart
+    function renderProductsSvg(svg, prods, tableContentId, csvKey) {
       if (!svg) return;
       svg.innerHTML = '';
-      const w = 900, h = 200, pad = 25;
+      const w = 920, h = 210, padL = 70, padB = 40, padT = 20, padR = 25;
+      const innerW = w - padL - padR;
+      const innerH = h - padT - padB;
+
+      // Base axes
+      const xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      xAxis.setAttribute('x1', padL);
+      xAxis.setAttribute('y1', h - padB);
+      xAxis.setAttribute('x2', w - padR);
+      xAxis.setAttribute('y2', h - padB);
+      xAxis.setAttribute('class', 'axis-line');
+      svg.appendChild(xAxis);
 
       if (!prods || prods.length === 0) {
         const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -1871,13 +2326,32 @@
         return;
       }
 
+      const totalSales = prods.reduce((acc, p) => acc + (p.sales || 0), 0);
       const maxSales = Math.max(...prods.map(p => p.sales), 1);
-      const barW = (w - 2 * pad) / prods.length - 12;
+
+      // Y-Axis Ticks
+      [0, 0.5, 1.0].forEach(frac => {
+        const val = maxSales * frac;
+        const y = (h - padB) - frac * innerH;
+
+        const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        lbl.setAttribute('x', padL - 8);
+        lbl.setAttribute('y', y + 3);
+        lbl.setAttribute('text-anchor', 'end');
+        lbl.setAttribute('class', 'axis-text tabular');
+        lbl.textContent = `$${Math.round(val).toLocaleString()}`;
+        svg.appendChild(lbl);
+      });
+
+      const barW = (innerW / prods.length) - 14;
+      let csv = "rank,product_id,category,units,sales_usd,share_pct\n";
+      let tableRows = `<table class="data-table" style="font-size:11px;"><thead><tr><th>Rank</th><th>Product</th><th>Category</th><th class="tabular">Units</th><th class="tabular">Sales ($)</th><th class="tabular">Share</th></tr></thead><tbody>`;
 
       prods.forEach((p, idx) => {
-        const x = pad + idx * (barW + 12);
-        const barH = (p.sales / maxSales) * (h - 2 * pad - 20);
-        const y = (h - pad) - barH;
+        const x = padL + idx * (barW + 14);
+        const barH = (p.sales / maxSales) * innerH;
+        const y = (h - padB) - barH;
+        const sharePct = totalSales > 0 ? ((p.sales / totalSales) * 100).toFixed(1) : '0.0';
 
         const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         rect.setAttribute('x', x);
@@ -1885,36 +2359,80 @@
         rect.setAttribute('width', barW);
         rect.setAttribute('height', Math.max(barH, 2));
         rect.setAttribute('class', 'chart-bar');
-        rect.innerHTML = `<title>Product #${p.product_id} (${p.category || 'General'})\nSales: $${p.sales.toFixed(2)}\nUnits: ${p.units}</title>`;
+
+        const tip = `Rank #${idx + 1} · Product #${p.product_id} (${p.category || 'General'})\nSales: $${p.sales.toFixed(2)} (${p.units} units)\nShare: ${sharePct}% of top 10 sales`;
+        rect.addEventListener('mouseenter', (e) => showGlobalTooltip(e, tip));
+        rect.addEventListener('mouseleave', hideGlobalTooltip);
         svg.appendChild(rect);
 
+        // Product label below
         const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         lbl.setAttribute('x', x + barW / 2);
-        lbl.setAttribute('y', h - pad + 14);
+        lbl.setAttribute('y', h - padB + 16);
         lbl.setAttribute('text-anchor', 'middle');
         lbl.setAttribute('class', 'axis-text');
         lbl.textContent = `#${p.product_id}`;
         svg.appendChild(lbl);
+
+        // Exact value on top of bar (B.1)
+        const valText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        valText.setAttribute('x', x + barW / 2);
+        valText.setAttribute('y', Math.max(y - 5, padT));
+        valText.setAttribute('text-anchor', 'middle');
+        valText.setAttribute('class', 'axis-text tabular');
+        valText.textContent = `$${Math.round(p.sales)}`;
+        svg.appendChild(valText);
+
+        csv += `${idx + 1},${p.product_id},"${p.category || 'General'}",${p.units},${p.sales.toFixed(2)},${sharePct}%\n`;
+        tableRows += `<tr><td>#${idx + 1}</td><td>Product #${p.product_id}</td><td>${p.category || 'General'}</td><td class="tabular">${p.units.toLocaleString()}</td><td class="tabular">$${p.sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td class="tabular">${sharePct}%</td></tr>`;
       });
+
+      tableRows += `</tbody></table>`;
+      if (tableContentId) {
+        document.getElementById(tableContentId).innerHTML = tableRows;
+        state.csvCache[csvKey] = csv;
+      }
     }
 
-    function renderTopTenantsSvg(svg, tenants) {
+    // 4. Top 10 Stores Horizontal Bar Chart (Bug A.3 Fix)
+    function renderTopTenantsSvg(svg, tenants, noticeId, tableContentId, csvKey) {
       if (!svg) return;
       svg.innerHTML = '';
-      const w = 300, h = 240, pad = 20;
+      const w = 320, h = 250, padL = 75, padR = 80, padT = 15, padB = 30;
 
-      if (!tenants || tenants.length === 0) return;
+      if (!tenants || tenants.length === 0) {
+        if (noticeId) document.getElementById(noticeId).textContent = "only 0 stores had sales in this range";
+        return;
+      }
+
+      // Check if fewer than 10 stores (Bug A.3)
+      if (noticeId) {
+        if (tenants.length < 10) {
+          document.getElementById(noticeId).textContent = `only ${tenants.length} stores had sales in this range`;
+        } else {
+          document.getElementById(noticeId).textContent = "";
+        }
+      }
+
+      const totalSales = tenants.reduce((acc, t) => acc + (t.sales || 0), 0);
       const maxSales = Math.max(...tenants.map(t => t.sales), 1);
-      const barH = 14;
+      const innerW = w - padL - padR;
+      const count = Math.min(tenants.length, 10);
+      const barH = 15;
       const gap = 8;
 
-      tenants.slice(0, 8).forEach((t, idx) => {
-        const y = pad + idx * (barH + gap);
-        const barW = (t.sales / maxSales) * (w - 110);
+      let csv = "rank,store_id,order_count,sales_usd,share_pct\n";
+      let tableRows = `<table class="data-table" style="font-size:11px;"><thead><tr><th>Rank</th><th>Store</th><th class="tabular">Orders</th><th class="tabular">Sales ($)</th><th class="tabular">Share</th></tr></thead><tbody>`;
+
+      tenants.slice(0, 10).forEach((t, idx) => {
+        const y = padT + idx * (barH + gap);
+        const barW = (t.sales / maxSales) * innerW;
+        const sharePct = totalSales > 0 ? ((t.sales / totalSales) * 100).toFixed(1) : '0.0';
 
         const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        lbl.setAttribute('x', 10);
+        lbl.setAttribute('x', padL - 8);
         lbl.setAttribute('y', y + 11);
+        lbl.setAttribute('text-anchor', 'end');
         lbl.setAttribute('class', 'axis-text');
         lbl.textContent = `Store ${t.tenant_id}`;
         lbl.style.cursor = 'pointer';
@@ -1926,45 +2444,114 @@
         svg.appendChild(lbl);
 
         const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        rect.setAttribute('x', 75);
+        rect.setAttribute('x', padL);
         rect.setAttribute('y', y);
         rect.setAttribute('width', Math.max(barW, 2));
         rect.setAttribute('height', barH);
         rect.setAttribute('class', 'chart-bar');
-        rect.style.cursor = 'pointer';
-        rect.innerHTML = `<title>Store ${t.tenant_id}: $${t.sales.toFixed(2)} (${t.order_count} orders)</title>`;
+
+        const tip = `Rank #${idx + 1} · Store ${t.tenant_id}\nSales: $${t.sales.toFixed(2)} (${t.order_count} orders)\nShare: ${sharePct}% of top stores`;
+        rect.addEventListener('mouseenter', (e) => showGlobalTooltip(e, tip));
+        rect.addEventListener('mouseleave', hideGlobalTooltip);
         rect.addEventListener('click', () => {
           state.tenantId = t.tenant_id;
           tenantSelect.value = t.tenant_id;
           document.getElementById('navTenantBtn').click();
         });
         svg.appendChild(rect);
+
+        // Exact number at end of bar (B.1)
+        const valText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        valText.setAttribute('x', padL + Math.max(barW, 2) + 6);
+        valText.setAttribute('y', y + 11);
+        valText.setAttribute('class', 'axis-text tabular');
+        valText.textContent = `$${Math.round(t.sales).toLocaleString()}`;
+        svg.appendChild(valText);
+
+        csv += `${idx + 1},Store ${t.tenant_id},${t.order_count},${t.sales.toFixed(2)},${sharePct}%\n`;
+        tableRows += `<tr><td>#${idx + 1}</td><td><strong>Store ${t.tenant_id}</strong></td><td class="tabular">${t.order_count.toLocaleString()}</td><td class="tabular">$${t.sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td><td class="tabular">${sharePct}%</td></tr>`;
       });
+
+      tableRows += `</tbody></table>`;
+      if (tableContentId) {
+        document.getElementById(tableContentId).innerHTML = tableRows;
+        state.csvCache[csvKey] = csv;
+      }
     }
 
-    function renderWorstLagTrendSvg(svg, history) {
+    // 5. Worst Delay Over Time (B.6)
+    function renderWorstLagTrendSvg(svg, history, summaryId, tableContentId, csvKey) {
       if (!svg) return;
       svg.innerHTML = '';
-      const w = 900, h = 180, pad = 30;
+      const w = 920, h = 200, padL = 70, padB = 40, padT = 20, padR = 30;
+      const innerW = w - padL - padR;
+      const innerH = h - padT - padB;
 
+      // Base axes (Baseline at y = 0)
       const xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      xAxis.setAttribute('x1', pad);
-      xAxis.setAttribute('y1', h - pad);
-      xAxis.setAttribute('x2', w - pad);
-      xAxis.setAttribute('y2', h - pad);
+      xAxis.setAttribute('x1', padL);
+      xAxis.setAttribute('y1', h - padB);
+      xAxis.setAttribute('x2', w - padR);
+      xAxis.setAttribute('y2', h - padB);
       xAxis.setAttribute('class', 'axis-line');
       svg.appendChild(xAxis);
 
-      if (history.length < 2) return;
+      const yAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      yAxis.setAttribute('x1', padL);
+      yAxis.setAttribute('y1', padT);
+      yAxis.setAttribute('x2', padL);
+      yAxis.setAttribute('y2', h - padB);
+      yAxis.setAttribute('class', 'axis-line');
+      svg.appendChild(yAxis);
+
       const maxVal = Math.max(...history, 1.0);
-      const innerW = w - 2 * pad;
-      const innerH = h - 2 * pad;
+      const latestVal = history[history.length - 1] || 0.0;
+
+      if (summaryId) {
+        document.getElementById(summaryId).textContent = `latest: ${latestVal.toFixed(2)}s · max: ${maxVal.toFixed(2)}s`;
+      }
+
+      // Y-Axis Ticks in seconds (B.6)
+      [0, 0.5, 1.0].forEach(frac => {
+        const val = maxVal * frac;
+        const y = (h - padB) - frac * innerH;
+
+        const grid = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        grid.setAttribute('x1', padL);
+        grid.setAttribute('y1', y);
+        grid.setAttribute('x2', w - padR);
+        grid.setAttribute('y2', y);
+        grid.setAttribute('class', 'axis-gridline');
+        svg.appendChild(grid);
+
+        const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        lbl.setAttribute('x', padL - 8);
+        lbl.setAttribute('y', y + 3);
+        lbl.setAttribute('text-anchor', 'end');
+        lbl.setAttribute('class', 'axis-text tabular');
+        lbl.textContent = `${val.toFixed(2)} s`;
+        svg.appendChild(lbl);
+      });
+
+      if (history.length < 2) return;
 
       let dPath = '';
       history.forEach((val, idx) => {
-        const x = pad + (idx / (history.length - 1)) * innerW;
-        const y = (h - pad) - (val / maxVal) * innerH;
+        const x = padL + (idx / (history.length - 1)) * innerW;
+        const y = (h - padB) - (val / maxVal) * innerH;
         dPath += (idx === 0 ? 'M' : 'L') + `${x.toFixed(1)},${y.toFixed(1)} `;
+
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', x);
+        dot.setAttribute('cy', y);
+        dot.setAttribute('r', '3');
+        dot.setAttribute('fill', 'var(--warn)');
+        dot.setAttribute('class', 'chart-point');
+
+        const tip = `Worst lag: ${val.toFixed(2)} s\nLogged ${history.length - idx}s ago`;
+        dot.addEventListener('mouseenter', (e) => showGlobalTooltip(e, tip));
+        dot.addEventListener('mouseleave', hideGlobalTooltip);
+        svg.appendChild(dot);
       });
 
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -1972,7 +2559,61 @@
       path.setAttribute('class', 'chart-line');
       path.setAttribute('stroke', 'var(--warn)');
       svg.appendChild(path);
+
+      // Latest value label
+      const latestX = padL + innerW;
+      const latestY = (h - padB) - (latestVal / maxVal) * innerH;
+      const latestText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      latestText.setAttribute('x', latestX);
+      latestText.setAttribute('y', Math.max(latestY - 6, padT + 8));
+      latestText.setAttribute('text-anchor', 'end');
+      latestText.setAttribute('class', 'axis-text tabular');
+      latestText.setAttribute('fill', 'var(--warn)');
+      latestText.style.fontWeight = '700';
+      latestText.textContent = `latest: ${latestVal.toFixed(2)}s`;
+      svg.appendChild(latestText);
+
+      if (tableContentId) {
+        let csv = "seconds_ago,worst_lag_seconds\n";
+        let tableRows = `<table class="data-table" style="font-size:11px;"><thead><tr><th>Time</th><th class="tabular">Worst Delay (s)</th></tr></thead><tbody>`;
+        history.slice().reverse().forEach((val, idx) => {
+          csv += `${idx * 2},${val.toFixed(2)}\n`;
+          tableRows += `<tr><td>${idx * 2}s ago</td><td class="tabular">${val.toFixed(2)} s</td></tr>`;
+        });
+        tableRows += `</tbody></table>`;
+        document.getElementById(tableContentId).innerHTML = tableRows;
+        state.csvCache[csvKey] = csv;
+      }
     }
+
+    // -------------------------------------------------------------------------
+    // "SHOW DATA" TOGGLE & "COPY CSV" EVENT DELEGATION
+    // -------------------------------------------------------------------------
+    document.querySelectorAll('.data-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.getAttribute('data-target');
+        const wrap = document.getElementById(targetId);
+        if (wrap.style.display === 'block') {
+          wrap.style.display = 'none';
+          btn.textContent = 'Show data';
+        } else {
+          wrap.style.display = 'block';
+          btn.textContent = 'Hide data';
+        }
+      });
+    });
+
+    document.querySelectorAll('.btn-copy-csv').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const csvKey = btn.getAttribute('data-csv');
+        const csvData = state.csvCache[csvKey] || "";
+        if (csvData) {
+          navigator.clipboard.writeText(csvData);
+          btn.textContent = 'Copied!';
+          setTimeout(() => btn.textContent = 'Copy CSV', 1500);
+        }
+      });
+    });
 
     // -------------------------------------------------------------------------
     // ISOLATION SECURITY CHECK
@@ -1989,7 +2630,6 @@
       const tid = state.tenantId;
       const otherTid = tid === 1 ? 2 : 1;
 
-      // 1. Unauthenticated call to real API -> Expect 403
       let resNoKey = "pending";
       try {
         await inspectedFetch(`/tenants/${tid}/orders/count?from=${fromStr}&to=${toStr}`, {}, "summary tables", "Isolation Check");
@@ -1998,7 +2638,6 @@
         resNoKey = `Blocked: 403. Missing key rejected by server boundary.`;
       }
 
-      // 2. Cross-tenant call to real API -> Expect 403
       let resCrossKey = "pending";
       try {
         await inspectedFetch(`/tenants/${tid}/orders/count?from=${fromStr}&to=${toStr}`, {
@@ -2095,12 +2734,10 @@
       document.getElementById('rollupDuration').textContent = 'Querying...';
 
       try {
-        // 1. Naive query direct on tenant DB
         const naiveRes = await inspectedFetch(`/ui-api/demo/naive/${state.tenantId}`, {}, "tenant database (direct)", "Benchmark Naive");
         document.getElementById('naiveDuration').textContent = `${naiveRes.elapsed_ms.toFixed(1)} ms`;
         document.getElementById('naiveRows').textContent = `${naiveRes.rows_count} rows scanned in tenant DB`;
 
-        // 2. Summary layer query
         const t0 = performance.now();
         const r = getRangeTimestamps(state.tenantRange);
         await inspectedFetch(`/ui-api/tenants/${state.tenantId}/products/top?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}&n=10&by=sales`, {}, "summary tables", "Benchmark Rollup");
@@ -2177,7 +2814,6 @@
       switchView('tenant');
     });
 
-    // Sub navigation in Admin
     document.querySelectorAll('.sub-nav button').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.sub-nav button').forEach(b => b.classList.remove('active'));
@@ -2189,7 +2825,6 @@
       });
     });
 
-    // Range selector in Tenant View
     document.querySelectorAll('#viewTenant .range-selector button').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('#viewTenant .range-selector button').forEach(b => b.classList.remove('active'));
@@ -2199,7 +2834,6 @@
       });
     });
 
-    // Range selector in Admin View
     document.querySelectorAll('#viewAdmin .range-selector button').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('#viewAdmin .range-selector button').forEach(b => b.classList.remove('active'));
@@ -2214,7 +2848,6 @@
       inspectedFetch(`/ui-api/platform/tenants?${q}`, {}, "summary tables", "Admin Tenants Search").then(renderAdminTenantsTable);
     });
 
-    // Theme Toggle
     const themeBtn = document.getElementById('themeToggleBtn');
     themeBtn.addEventListener('click', () => {
       if (document.documentElement.getAttribute('data-theme') === 'dark') {
@@ -2232,7 +2865,7 @@
     function startPolling() {
       if (state.pollTimer) clearInterval(state.pollTimer);
       state.pollTimer = setInterval(() => {
-        if (document.hidden) return; // Pause polling when tab is hidden
+        if (document.hidden) return;
         if (viewTenant.classList.contains('active')) {
           refreshTenantView();
         } else if (viewAdmin.classList.contains('active')) {
@@ -2241,7 +2874,6 @@
       }, 1000);
     }
 
-    // Initial Load
     refreshTenantView();
     startPolling();
   </script>

@@ -6,9 +6,10 @@ Provides credential-free access for the dashboard by adding the appropriate
 tenant key or admin key server-side. The browser never receives or sends any secret key.
 Returns 404 on all routes when UI_OPEN_MODE=0.
 """
-import os
+import os, time
 from typing import Optional, Literal
-from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, Request, Response
+from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
 from config import get_config
@@ -21,7 +22,18 @@ def check_ui_open_mode():
     if os.getenv("UI_OPEN_MODE", "1") != "1":
         raise HTTPException(status_code=404, detail="UI Open Mode is disabled")
 
-router = APIRouter(prefix="/ui-api", dependencies=[Depends(check_ui_open_mode)])
+class TimedRoute(APIRoute):
+    def get_route_handler(self):
+        original_handler = super().get_route_handler()
+        async def custom_handler(request: Request) -> Response:
+            start_time = time.perf_counter()
+            resp: Response = await original_handler(request)
+            duration_ms = (time.perf_counter() - start_time) * 1000.0
+            resp.headers["X-Process-Time-ms"] = f"{duration_ms:.2f}"
+            return resp
+        return custom_handler
+
+router = APIRouter(prefix="/ui-api", route_class=TimedRoute, dependencies=[Depends(check_ui_open_mode)])
 
 def _get_admin_key() -> str:
     profile = os.getenv("PROFILE", "1m")

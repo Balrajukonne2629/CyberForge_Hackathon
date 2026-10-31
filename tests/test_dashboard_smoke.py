@@ -219,6 +219,30 @@ def run_playwright_screen_verification():
             page.goto(url)
             page.wait_for_selector("#viewTenant.active")
             page.wait_for_timeout(1000)
+
+            # Assert Status chart has bars (Bug A.1 Fix verification)
+            status_bars_count = page.locator("#tenantStatusSvg rect.chart-bar").count()
+            assert status_bars_count > 0, f"Expected status chart to have bars, found {status_bars_count}"
+
+            # Open "Show data" on status chart and verify table (B.3)
+            page.click("button[data-target='tenantStatusDataWrap']")
+            page.wait_for_selector("#tenantStatusDataWrap[style*='block']")
+            page.wait_for_timeout(300)
+            status_table_rows = page.locator("#tenantStatusTableContent table tr").count()
+            assert status_table_rows >= 2, f"Expected table rows in Show Data, found {status_table_rows}"
+            page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_10_show_data_open_{device_name}.png"))
+            print(f"  Captured: screen_10_show_data_open_{device_name}.png")
+
+            # Hover on a chart point and check Tooltip shows IST (B.2)
+            first_point = page.locator("#tenantTrendSvg circle.chart-point").first
+            if first_point.count() > 0:
+                first_point.hover()
+                page.wait_for_timeout(300)
+                tooltip_text = page.locator("#globalChartTooltip").inner_text()
+                assert "IST" in tooltip_text, f"Expected tooltip to contain IST time, got: {tooltip_text}"
+                page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_11_chart_tooltip_{device_name}.png"))
+                print(f"  Captured: screen_11_chart_tooltip_{device_name}.png (with IST tooltip)")
+
             page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_01_store_view_{device_name}.png"))
             print(f"  Captured: screen_01_store_view_{device_name}.png")
 
@@ -227,6 +251,11 @@ def run_playwright_screen_verification():
             page.wait_for_selector("#viewAdmin.active")
             page.wait_for_selector("#adminSub-overview")
             page.wait_for_timeout(1000)
+
+            # Assert top-10 chart has bars equal to API rows (Bug A.3 Fix verification)
+            top_stores_bars = page.locator("#adminTopTenantsSvg rect.chart-bar").count()
+            assert top_stores_bars == 10, f"Expected 10 stores in top-10 chart, found {top_stores_bars}"
+
             page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_02_admin_overview_{device_name}.png"))
             print(f"  Captured: screen_02_admin_overview_{device_name}.png")
 
@@ -239,8 +268,17 @@ def run_playwright_screen_verification():
             # 4. Admin Health & 10x10 Heatmap
             page.click(".sub-nav button[data-sub='health']")
             page.wait_for_timeout(800)
+
+            # Assert Heatmap has 100 cells (Bug A.2 Fix verification)
+            heatmap_cells_count = page.locator("#heatmapGrid .heatmap-cell").count()
+            assert heatmap_cells_count == 100, f"Expected 100 heatmap cells, found {heatmap_cells_count}"
+
+            # Verify tooltip on heatmap cell hover
+            page.locator("#heatmapGrid .heatmap-cell").first.hover()
+            page.wait_for_timeout(200)
+
             page.screenshot(path=os.path.join(SCREENS_DIR, f"screen_04_admin_health_{device_name}.png"))
-            print(f"  Captured: screen_04_admin_health_{device_name}.png")
+            print(f"  Captured: screen_04_admin_health_{device_name}.png (with 100 heatmap cells)")
 
             # 5. Admin Scale Benchmark
             page.click(".sub-nav button[data-sub='scale']")
