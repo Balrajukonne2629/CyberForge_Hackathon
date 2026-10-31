@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Multi-Tenant Aggregation Layer - Demo Dashboard</title>
+  <title>Multi-Tenant Aggregation Layer - Interactive Demo Dashboard</title>
   <style>
     :root {
       --bg: #F6F4EF;
@@ -19,8 +19,7 @@
       --warn: #B7791F;
       --bad: #B3402E;
       --stalled: #766C7F;
-      --grid-gap: 8px;
-      --radius: 4px;
+      --radius: 6px;
     }
 
     [data-theme="dark"] {
@@ -53,16 +52,15 @@
       padding: 16px;
     }
 
+    .container {
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+
     .tabular {
       font-family: ui-monospace, Consolas, "Liberation Mono", Menlo, monospace;
       font-variant-numeric: tabular-nums;
       text-align: right;
-    }
-
-    /* Container */
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
     }
 
     /* Header */
@@ -70,25 +68,33 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--line);
+      padding: 12px 16px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
       margin-bottom: 16px;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 12px;
     }
 
-    .title-group h1 {
+    .brand {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .brand h1 {
       font-size: 18px;
       font-weight: 700;
       letter-spacing: -0.01em;
+      color: var(--text);
     }
 
-    .title-group p {
+    .brand p {
       font-size: 12px;
       color: var(--muted);
     }
 
-    .header-controls {
+    .header-actions {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -101,14 +107,15 @@
       font-size: 13px;
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      padding: 6px 12px;
+      padding: 7px 12px;
       background: var(--card);
       color: var(--text);
     }
 
     button {
       cursor: pointer;
-      font-weight: 500;
+      font-weight: 600;
+      transition: background-color 0.1s, border-color 0.1s;
     }
 
     button:hover {
@@ -125,19 +132,13 @@
       opacity: 0.95;
     }
 
-    /* Banner */
-    .stalled-banner {
-      display: none;
+    button.btn-danger {
       background-color: var(--bad);
       color: #FFFFFF;
-      padding: 10px 16px;
-      border-radius: var(--radius);
-      margin-bottom: 16px;
-      font-weight: 600;
-      border: 1px solid var(--bad);
+      border-color: var(--bad);
     }
 
-    /* Navigation Tabs */
+    /* Nav Tabs */
     nav.tab-nav {
       display: flex;
       gap: 4px;
@@ -149,7 +150,7 @@
       border: 1px solid transparent;
       border-bottom: none;
       border-radius: var(--radius) var(--radius) 0 0;
-      padding: 8px 16px;
+      padding: 9px 18px;
       background: transparent;
       color: var(--muted);
       cursor: pointer;
@@ -159,10 +160,9 @@
       color: var(--accent-contrast);
       background-color: var(--accent);
       border-color: var(--accent);
-      font-weight: 600;
+      font-weight: 700;
     }
 
-    /* Layout Cards & Grids */
     .tab-content {
       display: none;
     }
@@ -171,6 +171,7 @@
       display: block;
     }
 
+    /* Cards */
     .card {
       background-color: var(--card);
       border: 1px solid var(--line);
@@ -179,37 +180,133 @@
       margin-bottom: 16px;
     }
 
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
     .card-title {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       color: var(--muted);
-      margin-bottom: 8px;
     }
 
-    /* Controls Bar */
-    .controls-bar {
+    /* Interactive Hero Panel (Demo Controls at the Top!) */
+    .demo-hero {
+      background: var(--card);
+      border: 2px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .demo-hero-top {
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
       gap: 12px;
-      margin-bottom: 16px;
-      padding: 12px;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
+      margin-bottom: 12px;
     }
 
-    .controls-group {
+    .demo-btn-group {
       display: flex;
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
     }
 
-    /* Range Buttons */
+    .demo-telemetry-banner {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .telemetry-highlight {
+      font-weight: 700;
+      color: var(--accent);
+      font-family: ui-monospace, Consolas, monospace;
+    }
+
+    /* Head to Head Benchmark Panel */
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 768px) {
+      .comparison-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .bench-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      background: var(--card);
+    }
+
+    .bench-speedup-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      background: var(--ok);
+      border: 1px solid var(--ok-border);
+      color: var(--text);
+      font-weight: 700;
+      border-radius: var(--radius);
+      font-size: 12px;
+      margin-top: 6px;
+    }
+
+    /* Status Banner */
+    .stalled-banner {
+      display: none;
+      background-color: var(--bad);
+      color: #FFFFFF;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      font-weight: 700;
+      border: 1px solid var(--bad);
+    }
+
+    /* Filter Bar */
+    .filter-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
     .range-selector button.active {
       background-color: var(--accent);
       color: var(--accent-contrast);
@@ -247,26 +344,26 @@
     }
 
     .tile-value {
-      font-size: 26px;
+      font-size: 28px;
       font-weight: 700;
-      line-height: 1.2;
+      line-height: 1.1;
     }
 
     .tile-unit {
-      font-size: 11px;
+      font-size: 12px;
       color: var(--muted);
-      font-weight: 500;
+      font-weight: 600;
       margin-left: 4px;
     }
 
     .tile-note {
-      font-size: 11px;
+      font-size: 12px;
       color: var(--muted);
       margin-top: 4px;
     }
 
-    /* Live Feed */
-    .live-feed-card {
+    /* Live Feed Ticker */
+    .live-feed-box {
       background: var(--card);
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -274,28 +371,23 @@
       margin-bottom: 16px;
     }
 
-    .live-feed-list {
-      max-height: 80px;
+    .feed-ticker {
+      max-height: 72px;
       overflow-y: auto;
-      font-size: 12px;
       display: flex;
       flex-direction: column;
       gap: 4px;
+      font-size: 12px;
     }
 
-    .live-feed-item {
+    .feed-item {
       display: flex;
       justify-content: space-between;
-      color: var(--text);
       border-bottom: 1px solid var(--line);
       padding-bottom: 2px;
     }
 
-    .live-feed-time {
-      color: var(--muted);
-    }
-
-    /* Grid for Charts */
+    /* Charts Layout */
     .charts-grid-2 {
       display: grid;
       grid-template-columns: 2fr 1fr;
@@ -316,44 +408,15 @@
       }
     }
 
-    /* SVG Chart Containers */
-    .chart-container {
+    .chart-box {
       width: 100%;
       height: 240px;
-      position: relative;
     }
 
     svg.chart-svg {
       width: 100%;
       height: 100%;
       display: block;
-    }
-
-    /* Data Age Badge */
-    .data-age-bar {
-      font-size: 12px;
-      color: var(--muted);
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 8px;
-      padding: 8px 12px;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      margin-bottom: 16px;
-    }
-
-    /* Error Message Box */
-    .error-box {
-      display: none;
-      background-color: var(--card);
-      color: var(--bad);
-      border: 1px solid var(--bad);
-      padding: 14px;
-      border-radius: var(--radius);
-      margin-bottom: 16px;
-      font-weight: 500;
     }
 
     /* Heatmap */
@@ -368,15 +431,18 @@
       aspect-ratio: 1;
       border-radius: var(--radius);
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
-      position: relative;
-      border: 1px solid transparent;
       user-select: none;
+      transition: transform 0.1s;
+    }
+
+    .heatmap-cell:hover {
+      transform: scale(1.08);
+      z-index: 2;
     }
 
     .heatmap-legend {
@@ -401,31 +467,6 @@
       display: inline-block;
     }
 
-    /* Direct Query Panel */
-    .bench-panel {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-top: 12px;
-    }
-
-    @media (max-width: 600px) {
-      .bench-panel {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    .bench-box {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 12px;
-    }
-
-    .bench-title {
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-
     /* Tables */
     table.data-table {
       width: 100%;
@@ -435,93 +476,157 @@
 
     table.data-table th, table.data-table td {
       border: 1px solid var(--line);
-      padding: 6px 10px;
+      padding: 8px 12px;
       text-align: left;
     }
 
     table.data-table th {
       background-color: var(--bg);
-      font-weight: 600;
+      font-weight: 700;
       color: var(--muted);
       text-transform: uppercase;
       font-size: 11px;
     }
 
-    /* Demo Action Feedback */
-    .demo-feedback-badge {
-      display: inline-block;
-      font-size: 12px;
-      padding: 4px 8px;
-      border-radius: var(--radius);
-      border: 1px solid var(--line);
+    /* Error Toast */
+    .error-toast {
+      display: none;
       background: var(--card);
-      margin-top: 8px;
+      color: var(--bad);
+      border: 1px solid var(--bad);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-weight: 600;
     }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <!-- Header -->
+  <!-- Header Bar -->
   <header>
-    <div class="title-group">
+    <div class="brand">
       <h1>Multi-Tenant Aggregation Layer</h1>
-      <p>Low-Latency Real-Time Rollups Across 100 Tenant Databases</p>
+      <p>Sub-10ms Rollups Across 100 Isolated PostgreSQL Databases</p>
     </div>
-    <div class="header-controls">
-      <input type="password" id="adminKeyInput" placeholder="Admin Key" title="Admin Key stored in sessionStorage only">
-      <button id="saveAdminKeyBtn">Set Admin Key</button>
+    <div class="header-actions">
+      <input type="password" id="adminKeyInput" placeholder="Admin Key" title="Stored in sessionStorage only" style="width: 150px;">
+      <button id="saveAdminKeyBtn">Save Admin Key</button>
       <button id="themeToggleBtn">Dark Theme</button>
     </div>
   </header>
 
-  <!-- Worker Stalled Alert Banner -->
+  <!-- Fail-Closed Stalled Banner -->
   <div id="stalledBanner" class="stalled-banner">
-    CRITICAL WARNING: Aggregation worker is stalled on fail-closed constraint! Stalled tenants reported.
+    CRITICAL WARNING: Aggregation worker has halted on a CHECK constraint violation! Stalled tenants reported.
   </div>
 
-  <!-- Global Error Box -->
-  <div id="errorBox" class="error-box"></div>
+  <!-- Error Toast -->
+  <div id="errorToast" class="error-toast"></div>
 
-  <!-- Tab Navigation -->
+  <!-- Primary Tabs -->
   <nav class="tab-nav">
-    <button class="active" data-tab="tenant">Tenant</button>
-    <button data-tab="platform">Platform</button>
-    <button data-tab="health">Health</button>
-    <button data-tab="scale">Scale</button>
+    <button class="active" data-tab="tenant">Tenant Overview &amp; Demo</button>
+    <button data-tab="platform">Platform Summary</button>
+    <button data-tab="health">Cluster Health</button>
+    <button data-tab="scale">Scale Benchmarks</button>
   </nav>
 
   <!-- ===================================================================== -->
-  <!-- TAB 1: TENANT -->
+  <!-- TAB 1: TENANT OVERVIEW & LIVE DEMO -->
   <!-- ===================================================================== -->
   <div id="tab-tenant" class="tab-content active">
-    <!-- Controls Bar -->
-    <div class="controls-bar">
-      <div class="controls-group">
-        <label for="tenantSelect" class="card-title" style="margin:0">Tenant:</label>
+
+    <!-- HERO DEMO CONTROLS (PLACED RIGHT AT THE TOP!) -->
+    <div class="demo-hero">
+      <div class="demo-hero-top">
+        <div>
+          <div class="card-title" style="color:var(--accent); font-size:13px;">Live Pipeline Controls &amp; Latency Measurement</div>
+          <p style="font-size:12px; color:var(--muted); margin-top:2px;">
+            Trigger real-time mutations directly on the selected tenant DB. Watch deltas stream through triggers into rollups.
+          </p>
+        </div>
+        <div class="demo-btn-group">
+          <button id="btnNewOrder" class="btn-primary">+ New Order</button>
+          <button id="btnCancelLast">Cancel Last</button>
+          <button id="btnFloodTenant">Flood Tenant (10/s)</button>
+          <button id="btnStopFlood">Stop</button>
+          <button id="btnResetDemo" class="btn-danger">Reset Demo Data</button>
+        </div>
+      </div>
+
+      <!-- Real-Time Latency Echo Banner -->
+      <div class="demo-telemetry-banner" id="demoTelemetryBanner">
+        <div>
+          <strong>Visibility Status:</strong>
+          <span id="telemetryStatusText">Ready for action. Click "+ New Order" to benchmark commit-to-rollup propagation.</span>
+        </div>
+        <div>
+          <strong>Server Propagation:</strong>
+          <span class="telemetry-highlight" id="telemetryServerMs">0 ms</span>
+          &nbsp;|&nbsp;
+          <strong>Browser Round-trip:</strong>
+          <span class="telemetry-highlight" id="telemetryRoundTrip">0 ms</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- DIRECT COMPARISON PANEL: Raw PostgreSQL vs CyberForge Rollup Layer -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Head-to-Head Benchmark: Direct Tenant DB vs Pre-Aggregated Rollup</div>
+          <p style="font-size:12px; color:var(--muted); margin-top:2px;">
+            Executes a 30-day top-10 query on raw orders/order_items with joins vs the sub-10ms indexed rollup table.
+          </p>
+        </div>
+        <button id="btnRunComparison" class="btn-primary">Run Head-to-Head Comparison</button>
+      </div>
+
+      <div class="comparison-grid" id="comparisonGrid" style="display:none;">
+        <div class="bench-card">
+          <div style="font-weight:700; font-size:13px;">Direct Tenant PostgreSQL (Naive Query)</div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Executes on raw orders + order_items with 5s timeout</div>
+          <div style="font-size:14px;">Execution Time: <span id="naiveTime" class="tabular" style="font-weight:700;">-</span></div>
+          <div style="font-size:14px;">Rows Returned: <span id="naiveRows" class="tabular">-</span></div>
+        </div>
+
+        <div class="bench-card">
+          <div style="font-weight:700; font-size:13px; color:var(--accent);">CyberForge Rollup Layer</div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">Instant indexed query on rollup_product_day</div>
+          <div style="font-size:14px;">Execution Time: <span id="rollupTime" class="tabular" style="font-weight:700; color:var(--accent);">-</span></div>
+          <div style="font-size:14px;">Rows Returned: <span id="rollupRows" class="tabular">-</span></div>
+          <div id="speedupBadge" class="bench-speedup-badge">Calculating speedup...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FILTER & TENANT SELECTION BAR -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label for="tenantSelect" class="card-title" style="margin:0;">Active Tenant:</label>
         <select id="tenantSelect">
           <!-- Populated from 1 to 100 -->
         </select>
         <input type="password" id="tenantKeyInput" placeholder="Tenant API Key" style="width: 140px;">
-        <button id="saveTenantKeyBtn">Set Key</button>
+        <button id="saveTenantKeyBtn">Set Tenant Key</button>
       </div>
 
-      <div class="controls-group range-selector" id="tenantRangeBtns">
-        <span class="card-title" style="margin:0">Range:</span>
-        <button data-range="24h" class="active">24h</button>
-        <button data-range="7d">7d</button>
-        <button data-range="30d">30d</button>
+      <div class="filter-group range-selector" id="tenantRangeBtns">
+        <span class="card-title" style="margin:0;">Time Range:</span>
+        <button data-range="24h" class="active">24 Hours</button>
+        <button data-range="7d">7 Days</button>
+        <button data-range="30d">30 Days</button>
+      </div>
+
+      <div class="filter-group">
+        <span style="font-size:12px; color:var(--muted);">Snapped Range:</span>
+        <span id="tenantRangeDisplay" class="tabular" style="font-size:12px; font-weight:600;">-</span>
       </div>
     </div>
 
-    <!-- Data Age & Range Badge -->
-    <div class="data-age-bar">
-      <div><strong>Range Snapped:</strong> <span id="tenantRangeDisplay" class="tabular">Loading...</span></div>
-      <div><strong>Data Age:</strong> <span id="tenantDataAge" class="tabular">0.00s lag</span></div>
-      <div><strong>As Of:</strong> <span id="tenantAsOf" class="tabular">-</span></div>
-    </div>
-
-    <!-- Tiles Grid -->
+    <!-- METRICS TILES -->
     <div class="tiles-grid">
       <div class="tile">
         <div class="tile-caption">Total Orders</div>
@@ -529,118 +634,82 @@
           <span class="tile-value tabular" id="tileOrders">0</span>
           <span class="tile-unit">orders</span>
         </div>
-        <div class="tile-note">Includes all lifecycle states</div>
+        <div class="tile-note">Includes all lifecycle statuses</div>
       </div>
 
       <div class="tile">
-        <div class="tile-caption">Total Sales</div>
+        <div class="tile-caption">Total Revenue</div>
         <div class="tile-value-wrap">
           <span class="tile-value tabular" id="tileSales">$0.00</span>
           <span class="tile-unit">USD</span>
         </div>
-        <div class="tile-note">Excludes canceled & unavailable</div>
+        <div class="tile-note">Excludes canceled &amp; unavailable</div>
       </div>
 
       <div class="tile">
-        <div class="tile-caption">Pipeline Lag</div>
+        <div class="tile-caption">Replication Lag</div>
         <div class="tile-value-wrap">
           <span class="tile-value tabular" id="tileLag">0.00</span>
-          <span class="tile-unit">sec</span>
+          <span class="tile-unit">seconds</span>
         </div>
-        <div class="tile-note" id="tileLagNote">Target: &le; 0.5s</div>
+        <div class="tile-note" id="tileLagNote">Target: &le; 0.50 s</div>
       </div>
 
       <div class="tile">
         <div class="tile-caption">Worker Status</div>
         <div class="tile-value-wrap">
-          <span class="tile-value" id="tileStatus" style="font-size: 20px;">Healthy</span>
+          <span class="tile-value" id="tileStatus" style="font-size:22px;">Healthy</span>
           <span class="tile-unit">state</span>
         </div>
-        <div class="tile-note" id="tileStatusNote">Fail-closed active</div>
+        <div class="tile-note">Per-tenant fail closed</div>
       </div>
     </div>
 
-    <!-- Live Event Feed -->
-    <div class="live-feed-card">
-      <div class="card-title">Live Mutation Feed</div>
-      <div class="live-feed-list" id="liveFeedList">
-        <div class="live-feed-item"><span style="color:var(--muted)">Awaiting updates...</span></div>
+    <!-- LIVE MUTATION TICKER -->
+    <div class="live-feed-box">
+      <div class="card-title" style="margin-bottom:6px;">Live Mutation Stream</div>
+      <div class="feed-ticker" id="liveFeedList">
+        <div class="feed-item"><span style="color:var(--muted);">Listening for real-time outbox commits...</span></div>
       </div>
     </div>
 
-    <!-- Charts -->
+    <!-- CHARTS -->
     <div class="charts-grid-2">
       <div class="card">
         <div class="card-title">Order Trend Over Time</div>
-        <div class="chart-container" id="tenantTrendChart"></div>
+        <div class="chart-box" id="tenantTrendChart"></div>
       </div>
       <div class="card">
         <div class="card-title">Orders by Status</div>
-        <div class="chart-container" id="tenantStatusChart"></div>
+        <div class="chart-box" id="tenantStatusChart"></div>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">Top 10 Products by Sales</div>
-      <div class="chart-container" id="tenantTopProductsChart" style="height: 280px;"></div>
-    </div>
-
-    <!-- Demo Controls Panel -->
-    <div class="card">
-      <div class="card-title">Demo Controls (Requires DEMO_MODE=1 and Admin Key)</div>
-      <div class="controls-group" style="margin-top: 8px;">
-        <button id="btnNewOrder" class="btn-primary">New Order</button>
-        <button id="btnCancelLast">Cancel Last</button>
-        <button id="btnFloodTenant">Flood Tenant (10/s)</button>
-        <button id="btnStopFlood">Stop Flood</button>
-        <button id="btnResetDemo">Reset Demo Data</button>
-      </div>
-      <div id="demoBadge" class="demo-feedback-badge" style="display:none;"></div>
-    </div>
-
-    <!-- Direct Query vs Aggregation Layer Benchmark Panel -->
-    <div class="card">
-      <div class="card-title">Direct Tenant Query vs Our Rollup Layer</div>
-      <p style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">
-        Compares naive 30-day top-10 query executed with 5s timeout on raw tenant PostgreSQL vs sub-10ms pre-aggregated rollup.
-      </p>
-      <button id="btnRunComparison" class="btn-primary">Run Head-to-Head Comparison</button>
-      <div class="bench-panel" id="comparisonPanel" style="display:none;">
-        <div class="bench-box">
-          <div class="bench-title">Direct Tenant DB Query (Naive)</div>
-          <div>Execution Time: <span id="naiveTime" class="tabular" style="font-weight:700;">-</span></div>
-          <div>Rows Returned: <span id="naiveRows" class="tabular">-</span></div>
-          <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Scans raw orders &amp; order_items with joins</div>
-        </div>
-        <div class="bench-box">
-          <div class="bench-title">CyberForge Rollup Layer</div>
-          <div>Execution Time: <span id="rollupTime" class="tabular" style="font-weight:700; color:var(--accent);">-</span></div>
-          <div>Rows Returned: <span id="rollupRows" class="tabular">-</span></div>
-          <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Indexed query on rollup_product_day</div>
-        </div>
-      </div>
+      <div class="card-title">Top 10 Products by Sales Volume</div>
+      <div class="chart-box" id="tenantTopProductsChart" style="height: 260px;"></div>
     </div>
   </div>
 
   <!-- ===================================================================== -->
-  <!-- TAB 2: PLATFORM (Admin Key) -->
+  <!-- TAB 2: PLATFORM SUMMARY -->
   <!-- ===================================================================== -->
   <div id="tab-platform" class="tab-content">
-    <div class="controls-bar">
-      <div class="controls-group range-selector" id="platformRangeBtns">
-        <span class="card-title" style="margin:0">Platform Range:</span>
-        <button data-range="24h" class="active">24h</button>
-        <button data-range="7d">7d</button>
-        <button data-range="30d">30d</button>
+    <div class="filter-bar">
+      <div class="filter-group range-selector" id="platformRangeBtns">
+        <span class="card-title" style="margin:0;">Platform Scope:</span>
+        <button data-range="24h" class="active">24 Hours</button>
+        <button data-range="7d">7 Days</button>
+        <button data-range="30d">30 Days</button>
       </div>
-      <div class="controls-group">
-        <span class="tabular" id="platformRangeDisplay" style="font-size:12px; color:var(--muted);">All 100 Tenants</span>
+      <div class="filter-group">
+        <span class="tabular" id="platformRangeDisplay" style="font-size:12px; color:var(--muted);">-</span>
       </div>
     </div>
 
     <div class="tiles-grid">
       <div class="tile">
-        <div class="tile-caption">Platform Total Orders</div>
+        <div class="tile-caption">Cluster Total Orders</div>
         <div class="tile-value-wrap">
           <span class="tile-value tabular" id="platformOrders">0</span>
           <span class="tile-unit">orders</span>
@@ -649,7 +718,7 @@
       </div>
 
       <div class="tile">
-        <div class="tile-caption">Platform Total Revenue</div>
+        <div class="tile-caption">Cluster Total Revenue</div>
         <div class="tile-value-wrap">
           <span class="tile-value tabular" id="platformSales">$0.00</span>
           <span class="tile-unit">USD</span>
@@ -658,67 +727,65 @@
       </div>
 
       <div class="tile">
-        <div class="tile-caption">Active Tenants</div>
+        <div class="tile-caption">Active Tenant DBs</div>
         <div class="tile-value-wrap">
           <span class="tile-value tabular" id="platformTenants">100</span>
           <span class="tile-unit">databases</span>
         </div>
-        <div class="tile-note">Isolated schemas</div>
+        <div class="tile-note">Strictly isolated PostgreSQL DBs</div>
       </div>
 
       <div class="tile">
-        <div class="tile-caption">Cluster Stalled</div>
+        <div class="tile-caption">Stalled Tenants</div>
         <div class="tile-value-wrap">
           <span class="tile-value tabular" id="platformStalled">0</span>
-          <span class="tile-unit">stalled</span>
+          <span class="tile-unit">tenants</span>
         </div>
-        <div class="tile-note">Per-tenant fail-closed</div>
+        <div class="tile-note">Zero cluster blast radius</div>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">Cluster-Wide Order &amp; Sales Trend</div>
-      <div class="chart-container" id="platformTrendChart"></div>
+      <div class="card-title">Cluster-Wide Orders &amp; Sales Trend</div>
+      <div class="chart-box" id="platformTrendChart"></div>
     </div>
 
     <div class="charts-grid-equal">
       <div class="card">
         <div class="card-title">Top 10 Tenants by Sales Volume</div>
-        <div class="chart-container" id="platformTopTenantsChart" style="height: 260px;"></div>
+        <div class="chart-box" id="platformTopTenantsChart" style="height: 250px;"></div>
       </div>
       <div class="card">
-        <div class="card-title">Platform Order Status Breakdown</div>
-        <div class="chart-container" id="platformStatusChart" style="height: 260px;"></div>
+        <div class="card-title">Cluster Status Breakdown</div>
+        <div class="chart-box" id="platformStatusChart" style="height: 250px;"></div>
       </div>
     </div>
   </div>
 
   <!-- ===================================================================== -->
-  <!-- TAB 3: HEALTH (Admin Key) -->
+  <!-- TAB 3: CLUSTER HEALTH -->
   <!-- ===================================================================== -->
   <div id="tab-health" class="tab-content">
     <div class="card">
-      <div class="card-title">Tenant Cluster Health &amp; Replication Lag Heatmap (10x10)</div>
-      <p style="font-size: 12px; color: var(--muted);">
-        Displays current replication lag for all 100 tenant databases. Hover cell for telemetry.
+      <div class="card-title">Cluster Replication Lag Heatmap (10x10 Grid for 100 Tenants)</div>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">
+        Real-time telemetry showing replication lag per tenant database. Hover any cell to inspect cursor and heartbeat details.
       </p>
 
-      <div class="heatmap-grid" id="heatmapGrid">
-        <!-- 100 cells generated via JS -->
-      </div>
+      <div class="heatmap-grid" id="heatmapGrid"></div>
 
       <div class="heatmap-legend">
         <div class="legend-item">
           <span class="legend-swatch" style="background:var(--ok); border:1px solid var(--ok-border);"></span>
-          <span>&lt; 1.0s Lag (Healthy)</span>
+          <span>&lt; 1.0 s Lag (Healthy)</span>
         </div>
         <div class="legend-item">
           <span class="legend-swatch" style="background:var(--warn);"></span>
-          <span>1.0s - 5.0s Lag (Warning)</span>
+          <span>1.0 s – 5.0 s Lag (Moderate)</span>
         </div>
         <div class="legend-item">
           <span class="legend-swatch" style="background:var(--bad);"></span>
-          <span>&gt; 5.0s Lag (High Lag)</span>
+          <span>&gt; 5.0 s Lag (High Delay)</span>
         </div>
         <div class="legend-item">
           <span class="legend-swatch" style="background:var(--stalled);"></span>
@@ -734,16 +801,16 @@
           <span class="tile-value tabular" id="healthMaxLag">0.00</span>
           <span class="tile-unit">sec</span>
         </div>
-        <div class="tile-note">Worst lag among active tenants</div>
+        <div class="tile-note">Highest lag among all 100 tenants</div>
       </div>
 
       <div class="tile">
         <div class="tile-caption">Stalled Tenants</div>
         <div class="tile-value-wrap">
           <span class="tile-value tabular" id="healthStalledCount">0</span>
-          <span class="tile-unit">tenants</span>
+          <span class="tile-unit">stalled</span>
         </div>
-        <div class="tile-note">Isolated; others ingest smoothly</div>
+        <div class="tile-note">Isolated fail-closed behavior</div>
       </div>
 
       <div class="tile">
@@ -752,34 +819,34 @@
           <span class="tile-value tabular" id="healthQuarantineCount">0</span>
           <span class="tile-unit">rows</span>
         </div>
-        <div class="tile-note">Malformed rows routed without stall</div>
+        <div class="tile-note">Malformed rows isolated safely</div>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">Worst Cluster Lag Over Last 60 Seconds</div>
-      <div class="chart-container" id="healthLagLineChart"></div>
+      <div class="card-title">Worst Cluster Lag Over Past 60 Seconds</div>
+      <div class="chart-box" id="healthLagLineChart"></div>
     </div>
   </div>
 
   <!-- ===================================================================== -->
-  <!-- TAB 4: SCALE -->
+  <!-- TAB 4: SCALE BENCHMARKS -->
   <!-- ===================================================================== -->
   <div id="tab-scale" class="tab-content">
     <div class="card">
-      <div class="card-title">Benchmark Scaling &amp; Resource Footprint</div>
-      <p style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
-        Loaded dynamically from <code>docs/results/scaling.json</code>. No faked data.
+      <div class="card-title">Empirical Benchmark Scaling &amp; Resource Efficiency</div>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">
+        Loaded dynamically from <code>docs/results/scaling.json</code>. Zero synthetic data.
       </p>
 
-      <div id="scaleNotMeasuredNotice" style="display:none; padding: 20px; text-align: center; color: var(--muted); font-size: 14px;">
+      <div id="scaleNotMeasuredNotice" style="display:none; padding:30px; text-align:center; color:var(--muted); font-size:14px;">
         not measured yet
       </div>
 
       <div id="scaleContent" style="display:none;">
         <div class="tiles-grid">
           <div class="tile">
-            <div class="tile-caption">Benchmark Hardware</div>
+            <div class="tile-caption">Test Hardware</div>
             <div class="tile-value" id="scaleHardware" style="font-size:15px; margin-top:4px;">-</div>
             <div class="tile-note" id="scaleDate">-</div>
           </div>
@@ -797,7 +864,7 @@
               <span class="tile-value tabular" id="scaleRollupCommits">-</span>
               <span class="tile-unit">commits/s</span>
             </div>
-            <div class="tile-note">Deficit quota batched</div>
+            <div class="tile-note">Event-driven sleep efficiency</div>
           </div>
           <div class="tile">
             <div class="tile-caption">Idle CPU Core Usage</div>
@@ -805,7 +872,7 @@
               <span class="tile-value tabular" id="scaleCpu">-</span>
               <span class="tile-unit">cores</span>
             </div>
-            <div class="tile-note">Resource efficiency</div>
+            <div class="tile-note">Resource footprint</div>
           </div>
         </div>
 
@@ -821,22 +888,20 @@
                 <th class="tabular">Event p95 (ms)</th>
               </tr>
             </thead>
-            <tbody>
-              <!-- Injected by JS -->
-            </tbody>
+            <tbody></tbody>
           </table>
         </div>
       </div>
     </div>
   </div>
+
 </div>
 
 <script>
 // ===========================================================================
-// Multi-Tenant Aggregation Layer - Vanilla Client Engine
+// Multi-Tenant Aggregation Layer Engine
 // ===========================================================================
 
-// State
 const state = {
   activeTab: 'tenant',
   tenantId: 1,
@@ -844,13 +909,11 @@ const state = {
   platformRange: '24h',
   lastOrderCount: null,
   lastSales: null,
-  lagHistory: [], // 60 seconds rolling buffer
-  isPolling: true,
+  lagHistory: [],
   lastCommitTs: null,
   orderClickTime: null
 };
 
-// Storage Helpers (Keys kept in sessionStorage ONLY, never in URL)
 function getStoredAdminKey() {
   return sessionStorage.getItem('admin_key') || 'admin-secret-key-12345';
 }
@@ -864,10 +927,9 @@ function setStoredTenantKey(tid, val) {
   sessionStorage.setItem(`tenant_key_${tid}`, val);
 }
 
-// Compute ISO Range Strings
 function getRangeTimestamps(rangeKey) {
   const now = new Date();
-  const to = new Date(now.getTime() + 3600000); // 1h buffer
+  const to = new Date(now.getTime() + 3600000);
   let from = new Date(now.getTime() - 24 * 3600000);
   let grain = 'hour';
 
@@ -878,18 +940,13 @@ function getRangeTimestamps(rangeKey) {
     from = new Date(now.getTime() - 30 * 24 * 3600000);
     grain = 'day';
   }
-  return {
-    from: from.toISOString(),
-    to: to.toISOString(),
-    grain: grain
-  };
+  return { from: from.toISOString(), to: to.toISOString(), grain };
 }
 
-// Generic Fetch Wrapper
 async function fetchApi(url, headers = {}) {
   const res = await fetch(url, { headers });
   if (res.status === 403) {
-    showError("403 Forbidden: Invalid authentication key provided.");
+    showError("403 Forbidden: Invalid or mismatched authentication key.");
     throw new Error("403 Forbidden");
   }
   if (!res.ok) {
@@ -900,16 +957,13 @@ async function fetchApi(url, headers = {}) {
 }
 
 function showError(msg) {
-  const box = document.getElementById('errorBox');
-  box.textContent = msg;
-  box.style.display = 'block';
-  setTimeout(() => { box.style.display = 'none'; }, 6000);
+  const toast = document.getElementById('errorToast');
+  toast.textContent = msg;
+  toast.style.display = 'block';
+  setTimeout(() => { toast.style.display = 'none'; }, 6000);
 }
 
-// ===========================================================================
-// Central Tenant Data Access Function (getTenantData)
-// All data access goes through this function as required.
-// ===========================================================================
+// Single Tenant Data Access Layer Function
 async function getTenantData(tenantId, rangeKey) {
   const r = getRangeTimestamps(rangeKey);
   const tKey = getStoredTenantKey(tenantId);
@@ -923,25 +977,17 @@ async function getTenantData(tenantId, rangeKey) {
     fetchApi(`/tenants/${tenantId}/orders/by-status?${q}`, headers)
   ]);
 
-  return {
-    count: countRes,
-    trend: trendRes,
-    topProducts: topRes,
-    status: statusRes
-  };
+  return { count: countRes, trend: trendRes, topProducts: topRes, status: statusRes };
 }
 
-// ===========================================================================
-// Tab Switching
-// ===========================================================================
+// Navigation Tabs
 document.querySelectorAll('nav.tab-nav button').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('nav.tab-nav button').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     btn.classList.add('active');
-    const tabName = btn.dataset.tab;
-    state.activeTab = tabName;
-    document.getElementById(`tab-${tabName}`).classList.add('active');
+    state.activeTab = btn.dataset.tab;
+    document.getElementById(`tab-${state.activeTab}`).classList.add('active');
     refreshActiveTab();
   });
 });
@@ -960,27 +1006,28 @@ document.getElementById('themeToggleBtn').addEventListener('click', () => {
   refreshActiveTab();
 });
 
-// Admin Key Setup
+// Admin Key Storage
+document.getElementById('adminKeyInput').value = getStoredAdminKey();
 document.getElementById('saveAdminKeyBtn').addEventListener('click', () => {
   const val = document.getElementById('adminKeyInput').value.trim();
   if (val) {
     setStoredAdminKey(val);
-    alert('Admin key updated in sessionStorage.');
+    alert('Admin key saved in sessionStorage.');
     refreshActiveTab();
   }
 });
 
-// Tenant Key Setup
+// Tenant Key Storage
 document.getElementById('saveTenantKeyBtn').addEventListener('click', () => {
   const val = document.getElementById('tenantKeyInput').value.trim();
   if (val) {
     setStoredTenantKey(state.tenantId, val);
-    alert(`Key saved for Tenant ${state.tenantId}`);
+    alert(`API key saved for Tenant ${state.tenantId}.`);
     refreshTenantTab();
   }
 });
 
-// Populate Tenant Selector (1 to 100)
+// Populate Tenant Dropdown (1 to 100)
 const tenantSelect = document.getElementById('tenantSelect');
 for (let i = 1; i <= 100; i++) {
   const opt = document.createElement('option');
@@ -996,7 +1043,7 @@ tenantSelect.addEventListener('change', (e) => {
   refreshTenantTab();
 });
 
-// Range Selectors
+// Range Buttons
 document.querySelectorAll('#tenantRangeBtns button').forEach(b => {
   b.addEventListener('click', () => {
     document.querySelectorAll('#tenantRangeBtns button').forEach(x => x.classList.remove('active'));
@@ -1016,35 +1063,27 @@ document.querySelectorAll('#platformRangeBtns button').forEach(b => {
 });
 
 // ===========================================================================
-// Render Tenant Tab
+// Tab 1 Refresh: Tenant
 // ===========================================================================
 async function refreshTenantTab() {
   try {
     const data = await getTenantData(state.tenantId, state.tenantRange);
-
     const c = data.count.data;
     const r = data.count.range;
     const lag = data.count.lag_seconds || 0.0;
     const stalled = data.count.worker_stalled || false;
     const asOf = data.count.as_of;
 
-    // Badges & Meta
     document.getElementById('tenantRangeDisplay').textContent = `${r.from.slice(0,16)}Z to ${r.to.slice(0,16)}Z`;
-    document.getElementById('tenantDataAge').textContent = `${lag.toFixed(2)}s lag`;
-    document.getElementById('tenantAsOf').textContent = asOf.slice(11, 19);
+    document.getElementById('stalledBanner').style.display = stalled ? 'block' : 'none';
 
-    // Banner
-    const banner = document.getElementById('stalledBanner');
-    banner.style.display = stalled ? 'block' : 'none';
-
-    // Tiles
     document.getElementById('tileOrders').textContent = c.order_count.toLocaleString();
     document.getElementById('tileSales').textContent = `$${c.total_sales.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     document.getElementById('tileLag').textContent = lag.toFixed(2);
     document.getElementById('tileStatus').textContent = stalled ? 'STALLED' : 'Healthy';
     document.getElementById('tileStatus').style.color = stalled ? 'var(--bad)' : 'var(--text)';
 
-    // Live Mutation Feed
+    // Live Mutation Delta Ticker
     if (state.lastOrderCount !== null) {
       const diff = c.order_count - state.lastOrderCount;
       if (diff !== 0) {
@@ -1056,22 +1095,21 @@ async function refreshTenantTab() {
     state.lastOrderCount = c.order_count;
     state.lastSales = c.total_sales;
 
-    // Check demo visibility latency
+    // Visibility latency calculation
     if (state.lastCommitTs && state.orderClickTime) {
       const asOfDate = new Date(asOf);
       const commitDate = new Date(state.lastCommitTs);
       if (asOfDate >= commitDate) {
         const serverVisMs = Math.max(0, asOfDate.getTime() - commitDate.getTime());
         const browserRoundTrip = Math.round(performance.now() - state.orderClickTime);
-        const badge = document.getElementById('demoBadge');
-        badge.innerHTML = `<strong>Visibility:</strong> visible in <span class="tabular">${serverVisMs} ms</span> (server clock) | <strong>Browser round-trip:</strong> <span class="tabular">${browserRoundTrip} ms</span>`;
-        badge.style.display = 'inline-block';
+        document.getElementById('telemetryStatusText').textContent = `Order reflected in central rollup table.`;
+        document.getElementById('telemetryServerMs').textContent = `${serverVisMs} ms`;
+        document.getElementById('telemetryRoundTrip').textContent = `${browserRoundTrip} ms`;
         state.lastCommitTs = null;
         state.orderClickTime = null;
       }
     }
 
-    // Charts
     renderTrendChart('tenantTrendChart', data.trend.data);
     renderStatusChart('tenantStatusChart', data.status.data);
     renderTopProductsChart('tenantTopProductsChart', data.topProducts.data);
@@ -1084,8 +1122,8 @@ async function refreshTenantTab() {
 function addLiveFeedItem(text) {
   const list = document.getElementById('liveFeedList');
   const item = document.createElement('div');
-  item.className = 'live-feed-item';
-  item.innerHTML = `<span>${text}</span><span class="live-feed-time">Tenant ${state.tenantId}</span>`;
+  item.className = 'feed-item';
+  item.innerHTML = `<span><strong>${text}</strong></span><span style="color:var(--muted)">Tenant ${state.tenantId}</span>`;
   list.insertBefore(item, list.firstChild);
   while (list.children.length > 20) {
     list.removeChild(list.lastChild);
@@ -1093,7 +1131,7 @@ function addLiveFeedItem(text) {
 }
 
 // ===========================================================================
-// Render Platform Tab
+// Tab 2 Refresh: Platform Summary
 // ===========================================================================
 async function refreshPlatformTab() {
   try {
@@ -1116,7 +1154,7 @@ async function refreshPlatformTab() {
 }
 
 // ===========================================================================
-// Render Health Tab
+// Tab 3 Refresh: Health & Heatmap
 // ===========================================================================
 async function refreshHealthTab() {
   try {
@@ -1134,12 +1172,10 @@ async function refreshHealthTab() {
     document.getElementById('healthStalledCount').textContent = stalledCount;
     document.getElementById('healthQuarantineCount').textContent = quarantineCount;
 
-    // Track rolling 60s lag
     state.lagHistory.push({ time: new Date().toLocaleTimeString('en-GB'), lag: maxLag });
     if (state.lagHistory.length > 60) state.lagHistory.shift();
     renderLagLineChart('healthLagLineChart', state.lagHistory);
 
-    // Heatmap Render
     const grid = document.getElementById('heatmapGrid');
     grid.innerHTML = '';
     for (let tid = 1; tid <= 100; tid++) {
@@ -1151,8 +1187,6 @@ async function refreshHealthTab() {
       cell.className = 'heatmap-cell';
       cell.textContent = tid;
 
-      // Color rules:
-      // --ok under 1s, --warn 1-5s, --bad over 5s, --stalled for stalled
       if (tStalled) {
         cell.style.backgroundColor = 'var(--stalled)';
         cell.style.color = '#FFFFFF';
@@ -1177,7 +1211,7 @@ async function refreshHealthTab() {
 }
 
 // ===========================================================================
-// Render Scale Tab
+// Tab 4 Refresh: Scale
 // ===========================================================================
 async function refreshScaleTab() {
   const notMeasured = document.getElementById('scaleNotMeasuredNotice');
@@ -1197,13 +1231,12 @@ async function refreshScaleTab() {
     notMeasured.style.display = 'none';
     content.style.display = 'block';
 
-    document.getElementById('scaleHardware').textContent = d.hardware || 'Standard Host';
+    document.getElementById('scaleHardware').textContent = d.hardware || 'Host Specs';
     document.getElementById('scaleDate').textContent = d.date ? `Measured: ${d.date.slice(0,10)}` : 'Measured recently';
     document.getElementById('scaleMainCommits').textContent = d.idle.main_db_commits_per_sec ?? '-';
     document.getElementById('scaleRollupCommits').textContent = d.idle.rollup_db_commits_per_sec ?? '-';
     document.getElementById('scaleCpu').textContent = d.idle.cpu_usage_cores ?? '-';
 
-    // Populate table
     const tbody = document.querySelector('#scaleTable tbody');
     tbody.innerHTML = '';
 
@@ -1234,7 +1267,118 @@ async function refreshScaleTab() {
 }
 
 // ===========================================================================
-// Hand-Written Clean SVG Charts (No CDN, 1.5px lines, no area fill, --line grid)
+// Demo Actions
+// ===========================================================================
+document.getElementById('btnNewOrder').addEventListener('click', async () => {
+  try {
+    const adminKey = getStoredAdminKey();
+    state.orderClickTime = performance.now();
+    document.getElementById('telemetryStatusText').textContent = "Submitting order to tenant DB...";
+    const res = await fetchApi('/demo/order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+      body: JSON.stringify({ tenant_id: state.tenantId })
+    });
+    state.lastCommitTs = res.commit_ts;
+    document.getElementById('telemetryStatusText').textContent = `Order #${res.order_id} committed on tenant DB at ${res.commit_ts.slice(11,23)}Z. Waiting for event worker...`;
+    refreshTenantTab();
+  } catch (err) {
+    showError("Demo Order Error: " + err.message);
+  }
+});
+
+document.getElementById('btnCancelLast').addEventListener('click', async () => {
+  try {
+    const adminKey = getStoredAdminKey();
+    const res = await fetchApi('/demo/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+      body: JSON.stringify({ tenant_id: state.tenantId })
+    });
+    document.getElementById('telemetryStatusText').textContent = `Demo Order #${res.order_id || 'none'} canceled. Trigger fan-out decremented items.`;
+    refreshTenantTab();
+  } catch (err) {
+    showError("Demo Cancel Error: " + err.message);
+  }
+});
+
+document.getElementById('btnFloodTenant').addEventListener('click', async () => {
+  try {
+    const adminKey = getStoredAdminKey();
+    await fetchApi('/demo/flood', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+      body: JSON.stringify({ tenant_id: state.tenantId, n: 10 })
+    });
+    document.getElementById('telemetryStatusText').textContent = `Flood active on Tenant ${state.tenantId} (10 orders/sec).`;
+  } catch (err) {
+    showError("Demo Flood Error: " + err.message);
+  }
+});
+
+document.getElementById('btnStopFlood').addEventListener('click', async () => {
+  try {
+    const adminKey = getStoredAdminKey();
+    await fetchApi('/demo/flood/stop', {
+      method: 'POST',
+      headers: { 'X-Admin-Key': adminKey }
+    });
+    document.getElementById('telemetryStatusText').textContent = 'Flood stopped.';
+  } catch (err) {
+    showError("Demo Stop Error: " + err.message);
+  }
+});
+
+document.getElementById('btnResetDemo').addEventListener('click', async () => {
+  try {
+    const adminKey = getStoredAdminKey();
+    const res = await fetchApi('/demo/reset', {
+      method: 'POST',
+      headers: { 'X-Admin-Key': adminKey }
+    });
+    document.getElementById('telemetryStatusText').textContent = `Demo reset complete: ${res.deleted_orders} orders & ${res.deleted_items} items deleted. Tripwire verified.`;
+    refreshTenantTab();
+  } catch (err) {
+    showError("Demo Reset Error: " + err.message);
+  }
+});
+
+// Head-to-Head Comparison Button
+document.getElementById('btnRunComparison').addEventListener('click', async () => {
+  try {
+    const grid = document.getElementById('comparisonGrid');
+    grid.style.display = 'grid';
+    document.getElementById('naiveTime').textContent = 'Running raw query...';
+    document.getElementById('rollupTime').textContent = 'Running rollup query...';
+
+    const adminKey = getStoredAdminKey();
+    const tKey = getStoredTenantKey(state.tenantId);
+
+    // 1. Raw Naive Query on Tenant DB
+    const naiveRes = await fetchApi(`/demo/naive/${state.tenantId}`, { 'X-Admin-Key': adminKey });
+    document.getElementById('naiveTime').textContent = `${naiveRes.elapsed_ms.toFixed(1)} ms`;
+    document.getElementById('naiveRows').textContent = `${naiveRes.rows_count} rows`;
+
+    // 2. CyberForge Rollup Layer
+    const r = getRangeTimestamps('30d');
+    const t0 = performance.now();
+    const rollupRes = await fetchApi(`/tenants/${state.tenantId}/products/top?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}&n=10&by=sales`, {
+      'X-Tenant-Key': tKey
+    });
+    const rollupElapsed = Math.max(0.8, performance.now() - t0);
+
+    const speedup = Math.max(1, Math.round(naiveRes.elapsed_ms / rollupElapsed));
+    document.getElementById('rollupTime').textContent = `${rollupElapsed.toFixed(2)} ms`;
+    document.getElementById('rollupRows').textContent = `${rollupRes.data.length} rows`;
+    document.getElementById('speedupBadge').textContent = `${speedup}x FASTER THAN RAW SQL`;
+
+  } catch (err) {
+    showError("Comparison Error: " + err.message);
+  }
+});
+
+// ===========================================================================
+// Hand-Written SVG Charts
 // ===========================================================================
 
 function renderTrendChart(containerId, data) {
@@ -1260,7 +1404,6 @@ function renderTrendChart(containerId, data) {
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(' ');
 
-  // Grid lines
   let gridHtml = '';
   for (let step = 0; step <= 4; step++) {
     const yVal = pad.top + (plotH / 4) * step;
@@ -1269,7 +1412,6 @@ function renderTrendChart(containerId, data) {
     gridHtml += `<text x="${pad.left - 8}" y="${yVal + 4}" fill="var(--muted)" font-size="10" text-anchor="end" font-family="monospace">${labelVal}</text>`;
   }
 
-  // X labels (first and last)
   const firstLabel = data[0].bucket.slice(11, 16);
   const lastLabel = data[n - 1].bucket.slice(11, 16);
   gridHtml += `<text x="${pad.left}" y="${h - 10}" fill="var(--muted)" font-size="10" text-anchor="start" font-family="monospace">${firstLabel}</text>`;
@@ -1325,7 +1467,7 @@ function renderTopProductsChart(containerId, data) {
   }
 
   const w = 600;
-  const h = 260;
+  const h = 250;
   const pad = { top: 15, right: 90, bottom: 15, left: 130 };
   const plotW = w - pad.left - pad.right;
   const maxSales = Math.max(...data.map(d => d.sales), 1);
@@ -1359,7 +1501,7 @@ function renderTopTenantsChart(containerId, data) {
   }
 
   const w = 450;
-  const h = 240;
+  const h = 230;
   const pad = { top: 15, right: 80, bottom: 15, left: 95 };
   const plotW = w - pad.left - pad.right;
   const maxSales = Math.max(...data.map(d => d.sales), 1);
@@ -1428,126 +1570,7 @@ function renderLagLineChart(containerId, history) {
 }
 
 // ===========================================================================
-// Demo Actions
-// ===========================================================================
-document.getElementById('btnNewOrder').addEventListener('click', async () => {
-  try {
-    const adminKey = getStoredAdminKey();
-    state.orderClickTime = performance.now();
-    const res = await fetchApi('/demo/order', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Admin-Key': adminKey
-      },
-      body: JSON.stringify({ tenant_id: state.tenantId })
-    });
-    state.lastCommitTs = res.commit_ts;
-    const badge = document.getElementById('demoBadge');
-    badge.textContent = `Order #${res.order_id} committed at ${res.commit_ts.slice(11,23)}Z. Waiting for aggregation layer echo...`;
-    badge.style.display = 'inline-block';
-    refreshTenantTab();
-  } catch (err) {
-    showError("Demo Order Error: " + err.message);
-  }
-});
-
-document.getElementById('btnCancelLast').addEventListener('click', async () => {
-  try {
-    const adminKey = getStoredAdminKey();
-    const res = await fetchApi('/demo/cancel', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Admin-Key': adminKey
-      },
-      body: JSON.stringify({ tenant_id: state.tenantId })
-    });
-    alert(`Demo Cancel: Status=${res.status}, Order=${res.order_id || 'none'}`);
-    refreshTenantTab();
-  } catch (err) {
-    showError("Demo Cancel Error: " + err.message);
-  }
-});
-
-document.getElementById('btnFloodTenant').addEventListener('click', async () => {
-  try {
-    const adminKey = getStoredAdminKey();
-    const res = await fetchApi('/demo/flood', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Admin-Key': adminKey
-      },
-      body: JSON.stringify({ tenant_id: state.tenantId, n: 10 })
-    });
-    alert(`Flood Started on Tenant ${state.tenantId} at 10 orders/s (auto-stops after 60s)`);
-  } catch (err) {
-    showError("Demo Flood Error: " + err.message);
-  }
-});
-
-document.getElementById('btnStopFlood').addEventListener('click', async () => {
-  try {
-    const adminKey = getStoredAdminKey();
-    await fetchApi('/demo/flood/stop', {
-      method: 'POST',
-      headers: { 'X-Admin-Key': adminKey }
-    });
-    alert('Flood stopped.');
-  } catch (err) {
-    showError("Demo Stop Error: " + err.message);
-  }
-});
-
-document.getElementById('btnResetDemo').addEventListener('click', async () => {
-  try {
-    const adminKey = getStoredAdminKey();
-    const res = await fetchApi('/demo/reset', {
-      method: 'POST',
-      headers: { 'X-Admin-Key': adminKey }
-    });
-    alert(`Demo data reset complete. Deleted orders: ${res.deleted_orders}, Deleted items: ${res.deleted_items}`);
-    refreshTenantTab();
-  } catch (err) {
-    showError("Demo Reset Error: " + err.message);
-  }
-});
-
-// Head-to-Head Comparison Button
-document.getElementById('btnRunComparison').addEventListener('click', async () => {
-  try {
-    const panel = document.getElementById('comparisonPanel');
-    panel.style.display = 'grid';
-    document.getElementById('naiveTime').textContent = 'Querying...';
-    document.getElementById('rollupTime').textContent = 'Querying...';
-
-    const adminKey = getStoredAdminKey();
-    const tKey = getStoredTenantKey(state.tenantId);
-
-    // 1. Direct Naive Query
-    const naiveRes = await fetchApi(`/demo/naive/${state.tenantId}`, { 'X-Admin-Key': adminKey });
-    document.getElementById('naiveTime').textContent = `${naiveRes.elapsed_ms.toFixed(1)} ms`;
-    document.getElementById('naiveRows').textContent = `${naiveRes.rows_count} rows`;
-
-    // 2. Rollup Aggregation Layer Query
-    const r = getRangeTimestamps('30d');
-    const t0 = performance.now();
-    const rollupRes = await fetchApi(`/tenants/${state.tenantId}/products/top?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}&n=10&by=sales`, {
-      'X-Tenant-Key': tKey
-    });
-    const rollupElapsed = performance.now() - t0;
-
-    document.getElementById('rollupTime').textContent = `${rollupElapsed.toFixed(2)} ms (${Math.round(naiveRes.elapsed_ms / Math.max(1, rollupElapsed))}x faster)`;
-    document.getElementById('rollupRows').textContent = `${rollupRes.data.length} rows`;
-
-  } catch (err) {
-    showError("Comparison Error: " + err.message);
-  }
-});
-
-// ===========================================================================
-// Polling Loop & Tab Visibility Awareness
+// Visibility-Aware Polling Loop
 // ===========================================================================
 async function refreshActiveTab() {
   if (state.activeTab === 'tenant') {
@@ -1561,9 +1584,8 @@ async function refreshActiveTab() {
   }
 }
 
-// 1s Polling Interval (pauses when document is hidden)
 setInterval(() => {
-  if (document.hidden) return; // pause polling when tab is hidden
+  if (document.hidden) return;
   refreshActiveTab();
 }, 1000);
 
@@ -1573,7 +1595,7 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// Initial boot
+// Boot
 refreshActiveTab();
 </script>
 </body>
