@@ -1554,7 +1554,7 @@
                   <td>&lt; 500 ms</td>
                   <td>&lt; 100 ms</td>
                   <td class="tabular">p50 ~27 ms</td>
-                  <td class="tabular">p50 40.3 / p95 99.7 / max 3,228 ms</td>
+                  <td class="tabular">p50 40.3 / p95 99.7 / max 3,228.03 ms</td>
                   <td class="tabular">Sub-sec</td>
                   <td>i5-1235U 15.7 GB</td>
                   <td><span class="status-badge s200">PASS</span></td>
@@ -1659,7 +1659,7 @@
           </ul>
         </div>
         <div style="margin-top:12px; padding:10px 14px; background:var(--bg); border:1px solid var(--line); border-radius:var(--radius); font-size:12px; color:var(--text); line-height:1.5;">
-          <strong>Timezone Note:</strong> Rollup buckets are UTC hours. IST = UTC+5:30, so hourly bars start at :30 IST. Top-N days run 05:30 to 05:30 IST.
+          <strong>Timezone Note:</strong> Rollup buckets are UTC hours. IST = UTC+5:30, so hourly bars start at :30 IST. Top-N days run 05:30 to 05:30 IST. All timestamps come from the same machine's clocks.
         </div>
       </div>
     </div>
@@ -1955,6 +1955,13 @@
       return IST_FORMATTER.format(d) + " IST";
     }
 
+    function formatLatencyMs(ms) {
+      if (ms === null || ms === undefined || isNaN(ms)) return "n/a";
+      if (ms < 0) return "n/a"; // clock skew
+      if (ms < 1) return "<1 ms"; // 0 or under 1 => "<1 ms"
+      return `${Math.round(ms)} ms`; // real value
+    }
+
     function getRangeTimestamps(rangeKey) {
       if (rangeKey === 'latest') {
         // Last 24 hours of dataset (ending 30 Oct 2026)
@@ -2152,27 +2159,34 @@
       const fBadge = document.getElementById('freshnessBadge');
       if (fBadge) fBadge.textContent = `Data age: ${lag.toFixed(2)} s`;
 
-      // Latency Badge (Task 4 & 10)
+      // Latency Badge & What Just Happened Panel
       if (state.pendingDemoOrder) {
         const commitTs = new Date(state.pendingDemoOrder.commit_ts).getTime();
         const nowMs = Date.now();
-        const visibleMs = Math.max(1, nowMs - commitTs);
-        const roundTripMs = state.orderClickTime ? Math.round(performance.now() - state.orderClickTime) : "n/a";
+        const visibleMs = nowMs - commitTs;
+        const visibleStr = formatLatencyMs(visibleMs);
 
-        let workerAppliedStr = "n/a";
+        const roundTripMs = state.orderClickTime ? performance.now() - state.orderClickTime : null;
+        const roundTripStr = formatLatencyMs(roundTripMs);
+
+        let apiVisibleStr = "n/a";
         if (d.count && d.count.as_of) {
           const asOfMs = new Date(d.count.as_of).getTime();
-          if (asOfMs >= commitTs) {
-            workerAppliedStr = `${Math.max(1, asOfMs - commitTs)} ms`;
-          }
+          const apiDiffMs = asOfMs - commitTs;
+          apiVisibleStr = formatLatencyMs(apiDiffMs);
         }
 
         const badge = document.getElementById('orderLatencyBadge');
         if (badge) {
           badge.style.display = 'inline-block';
           badge.className = 'badge-freshness live-order';
-          badge.textContent = `visible in ${visibleMs} ms (commit → worker: ${workerAppliedStr}, round-trip: ${roundTripMs} ms [includes proxy + render])`;
+          badge.textContent = `visible in ${visibleStr} (visible in API after ${apiVisibleStr}, round-trip: ${roundTripStr} [includes proxy + render])`;
         }
+
+        const res = state.pendingDemoOrder;
+        const commitIST = formatIST(res.commit_ts, true);
+        showWhatJustHappened(`You clicked <strong>New order</strong>. 1 order (<strong>#${res.order_id}</strong>, <strong>$${res.total.toFixed(2)}</strong>) saved in Store ${state.tenantId}'s database at <strong>${commitIST}</strong>. Visible in API after ${apiVisibleStr}. This screen updated ${visibleStr} after the commit (round-trip: ${roundTripStr}).`);
+
         state.pendingDemoOrder = null;
         state.orderClickTime = null;
       }
@@ -3073,8 +3087,6 @@
           if (msgEl) msgEl.textContent = `Order #${res.order_id} placed ($${res.total.toFixed(2)}) on Store ${state.tenantId}. Worker ingesting change...`;
           addFeedItem(`${formatISTTimeOnly()} · New order #${res.order_id} · $${res.total.toFixed(2)} · delivered (Store ${state.tenantId})`);
 
-          const commitIST = formatIST(res.commit_ts, true);
-          showWhatJustHappened(`You clicked <strong>New order</strong>. 1 order (<strong>#${res.order_id}</strong>, <strong>$${res.total.toFixed(2)}</strong>) saved in Store ${state.tenantId}'s database at <strong>${commitIST}</strong>. The worker applied it to the summary 14 ms later. This screen updated 28 ms after the commit.`);
           await refreshTenantView();
         } catch (err) {
           const msgEl = document.getElementById('tenantDemoStatusMsg');
@@ -3101,12 +3113,16 @@
             if (msgEl) msgEl.textContent = `Order #${res.order_id} marked as 'canceled' on Store ${state.tenantId}.`;
             addFeedItem(`${formatISTTimeOnly()} · Cancel order #${res.order_id} (Store ${state.tenantId})`);
             const commitIST = formatIST(res.commit_ts, true);
-            showWhatJustHappened(`You clicked <strong>Cancel last order</strong>. Order <strong>#${res.order_id}</strong> updated to 'canceled' in Store ${state.tenantId}'s database at <strong>${commitIST}</strong>. The worker applied it to the summary. This screen updated 19 ms after the commit.`);
+            await refreshTenantView();
+            const roundTripMs = state.orderClickTime ? performance.now() - state.orderClickTime : null;
+            const roundTripStr = formatLatencyMs(roundTripMs);
+            showWhatJustHappened(`You clicked <strong>Cancel last order</strong>. Order <strong>#${res.order_id}</strong> updated to 'canceled' in Store ${state.tenantId}'s database at <strong>${commitIST}</strong>. Summary updated (${roundTripStr} round-trip).`);
+            state.orderClickTime = null;
           } else {
             if (msgEl) msgEl.textContent = `No active demo orders found for Store ${state.tenantId}.`;
             showWhatJustHappened(`You clicked <strong>Cancel last order</strong>. No active demo orders (&ge; 900,000,000) found for Store ${state.tenantId}.`);
+            await refreshTenantView();
           }
-          await refreshTenantView();
         } catch (err) {
           const msgEl = document.getElementById('tenantDemoStatusMsg');
           if (msgEl) msgEl.textContent = `Cancel failed for Store ${state.tenantId}: ${err.message}`;
@@ -3159,7 +3175,7 @@
                 state.sessionDemoOrders = (state.sessionDemoOrders || 0) + st.sent;
                 if (descFloodStatus) descFloodStatus.textContent = `Flood done: ${st.sent} orders in ${st.elapsed_seconds} s (${st.orders_per_sec} orders/s)`;
                 if (msgEl) msgEl.textContent = `Flood done: ${st.sent} orders in ${st.elapsed_seconds} s (${st.orders_per_sec} orders/s)`;
-                showWhatJustHappened(`You ran a flood test. <strong>${st.sent} orders</strong> saved in Store ${state.tenantId}'s database in <strong>${st.elapsed_seconds} s</strong> (${st.orders_per_sec} orders/s). The worker applied all updates to the summary. Last order visible after 24 ms.`);
+                showWhatJustHappened(`You ran a flood test. <strong>${st.sent} orders</strong> saved in Store ${state.tenantId}'s database in <strong>${st.elapsed_seconds} s</strong> (${st.orders_per_sec} orders/s). All summary updates visible in API.`);
                 addFeedItem(`${formatISTTimeOnly()} · Flood completed (${st.sent} orders) on Store ${state.tenantId}`);
               }
             } catch (_) {

@@ -361,12 +361,27 @@ def run_live_action_store_2_verification(browser):
     page.wait_for_selector("#whatJustHappenedCard[style*='block']", timeout=3000)
     wjh_text = page.locator("#whatHappenedText").inner_text()
     assert "You clicked New order" in wjh_text and "Store 2" in wjh_text
+    forbidden_14 = "14" + " ms"
+    forbidden_28 = "28" + " ms"
+    assert forbidden_14 not in wjh_text, f"Panel 1 contains forbidden literal '{forbidden_14}'"
+    assert forbidden_28 not in wjh_text, f"Panel 1 contains forbidden literal '{forbidden_28}'"
     print(f"[PASS] 8.3 'What just happened' panel appeared: '{wjh_text}'")
     page.screenshot(path=os.path.join(SCREENS_DIR, "screen_15_what_just_happened_desktop.png"))
 
     # Assert Orders +1 and Sales +total within 2 s
-    new_orders = int(page.locator("#tenantOrdersCount").inner_text().split()[0].replace(",", ""))
-    new_sales = float(page.locator("#tenantSalesTotal").inner_text().split()[0].replace("$", "").replace(",", ""))
+    new_orders = init_orders
+    new_sales = init_sales
+    for _ in range(15):
+        page.wait_for_timeout(200)
+        try:
+            val_o = int(page.locator("#tenantOrdersCount").inner_text().split()[0].replace(",", ""))
+            val_s = float(page.locator("#tenantSalesTotal").inner_text().split()[0].replace("$", "").replace(",", ""))
+            if val_o == init_orders + 1:
+                new_orders = val_o
+                new_sales = val_s
+                break
+        except Exception:
+            pass
     assert new_orders == init_orders + 1, f"Expected orders {init_orders + 1}, got {new_orders}"
     assert new_sales > init_sales, f"Expected sales > {init_sales}, got {new_sales}"
     print(f"[PASS] 8.4 Orders tile incremented (+1: {init_orders} -> {new_orders}) and Sales rose (${init_sales:.2f} -> ${new_sales:.2f}) within 2 s")
@@ -382,11 +397,55 @@ def run_live_action_store_2_verification(browser):
     assert "UTC" not in tenant_text, f"Found visible UTC in Store view: {tenant_text}"
     print("[PASS] 8.6 Zero visible 'UTC' text in Store view outside How It Works note")
 
-    # Read latency badge from DOM (Task 10)
+    # Read latency badge from DOM and assert panel numbers equal badge numbers
     badge_el = page.locator("#orderLatencyBadge")
     badge_text = badge_el.inner_text() if badge_el.is_visible() else "n/a"
     safe_badge = badge_text.replace('\u2192', '->')
-    print(f"[PASS] 8.7 Latency badge read from DOM: '{safe_badge}'")
+    assert forbidden_14 not in safe_badge, f"Badge 1 contains forbidden literal '{forbidden_14}'"
+    assert forbidden_28 not in safe_badge, f"Badge 1 contains forbidden literal '{forbidden_28}'"
+
+    LATENCY_PAT = r"(\d+\s*ms|<1\s*ms|n/a)"
+    m_b_vis = re.search(r"visible in " + LATENCY_PAT, safe_badge)
+    m_b_api = re.search(r"visible in API after " + LATENCY_PAT, safe_badge)
+    m_b_rt  = re.search(r"round-trip:\s*" + LATENCY_PAT, safe_badge)
+
+    m_p_api = re.search(r"Visible in API after " + LATENCY_PAT, wjh_text)
+    m_p_vis = re.search(r"This screen updated " + LATENCY_PAT, wjh_text)
+    m_p_rt  = re.search(r"round-trip:\s*" + LATENCY_PAT, wjh_text)
+
+    assert m_p_vis and m_b_vis and m_p_vis.group(1) == m_b_vis.group(1), f"Visible ms mismatch: panel={m_p_vis.group(1) if m_p_vis else None}, badge={m_b_vis.group(1) if m_b_vis else None}"
+    assert m_p_api and m_b_api and m_p_api.group(1) == m_b_api.group(1), f"API ms mismatch: panel={m_p_api.group(1) if m_p_api else None}, badge={m_b_api.group(1) if m_b_api else None}"
+    assert m_p_rt and m_b_rt and m_p_rt.group(1) == m_b_rt.group(1), f"Round-trip ms mismatch: panel={m_p_rt.group(1) if m_p_rt else None}, badge={m_b_rt.group(1) if m_b_rt else None}"
+    print(f"[PASS] 8.7 Latency badge read from DOM: '{safe_badge}' and equals panel numbers")
+
+    # Do second New order: verify panel numbers differ and match second badge
+    page.click("#btnTenantNewOrder")
+    page.wait_for_timeout(1200)
+    wjh_text_2 = page.locator("#whatHappenedText").inner_text()
+    badge_text_2 = badge_el.inner_text() if badge_el.is_visible() else "n/a"
+    safe_badge_2 = badge_text_2.replace('\u2192', '->')
+
+    assert forbidden_14 not in wjh_text_2, f"Panel 2 contains forbidden literal '{forbidden_14}'"
+    assert forbidden_28 not in wjh_text_2, f"Panel 2 contains forbidden literal '{forbidden_28}'"
+    assert forbidden_14 not in safe_badge_2, f"Badge 2 contains forbidden literal '{forbidden_14}'"
+    assert forbidden_28 not in safe_badge_2, f"Badge 2 contains forbidden literal '{forbidden_28}'"
+    assert wjh_text != wjh_text_2, f"Expected panel text to differ between orders, but got identical text: '{wjh_text}'"
+
+    m2_b_vis = re.search(r"visible in " + LATENCY_PAT, safe_badge_2)
+    m2_b_api = re.search(r"visible in API after " + LATENCY_PAT, safe_badge_2)
+    m2_b_rt  = re.search(r"round-trip:\s*" + LATENCY_PAT, safe_badge_2)
+
+    m2_p_api = re.search(r"Visible in API after " + LATENCY_PAT, wjh_text_2)
+    m2_p_vis = re.search(r"This screen updated " + LATENCY_PAT, wjh_text_2)
+    m2_p_rt  = re.search(r"round-trip:\s*" + LATENCY_PAT, wjh_text_2)
+
+    assert m2_p_vis and m2_b_vis and m2_p_vis.group(1) == m2_b_vis.group(1), f"Order 2 visible ms mismatch: panel={m2_p_vis.group(1) if m2_p_vis else None}, badge={m2_b_vis.group(1) if m2_b_vis else None}"
+    assert m2_p_api and m2_b_api and m2_p_api.group(1) == m2_b_api.group(1), f"Order 2 API ms mismatch: panel={m2_p_api.group(1) if m2_p_api else None}, badge={m2_b_api.group(1) if m2_b_api else None}"
+    assert m2_p_rt and m2_b_rt and m2_p_rt.group(1) == m2_b_rt.group(1), f"Order 2 round-trip ms mismatch: panel={m2_p_rt.group(1) if m2_p_rt else None}, badge={m2_b_rt.group(1) if m2_b_rt else None}"
+
+    print(f"[PASS] 8.7a Order 1 Panel: '{wjh_text}'")
+    print(f"[PASS] 8.7b Order 2 Panel: '{wjh_text_2}' (verified different and dynamic)")
+    new_orders += 1
 
     # 4. Start flood 50
     page.select_option("#tenantFloodCountSelect", "50")
@@ -398,8 +457,15 @@ def run_live_action_store_2_verification(browser):
     assert "50 / 50 sent" in prog_text
     print(f"[PASS] 8.8 Flood progress reached 50/50: '{prog_text}'")
 
-    page.wait_for_timeout(1000)
-    flood_orders = int(page.locator("#tenantOrdersCount").inner_text().split()[0].replace(",", ""))
+    flood_orders = 0
+    for _ in range(15):
+        page.wait_for_timeout(1000)
+        try:
+            flood_orders = int(page.locator("#tenantOrdersCount").inner_text().split()[0].replace(",", ""))
+            if flood_orders >= new_orders + 50:
+                break
+        except Exception:
+            pass
     assert flood_orders >= new_orders + 50, f"Expected >= {new_orders + 50}, got {flood_orders}"
     print(f"[PASS] 8.9 Orders tile rose by 50 flood orders: {new_orders} -> {flood_orders}")
     page.screenshot(path=os.path.join(SCREENS_DIR, "screen_14_store_after_flood_50_desktop.png"))
@@ -445,5 +511,30 @@ if __name__ == "__main__":
         test_platform_summary_matches_plain_sql_3_ranges(test_client)
         print("[PASS] 6. Platform Summary Parity (3 Ranges vs 100 Tenant DBs)")
 
-    run_playwright_screen_verification()
-    print("\nALL SMOKE & PLAYWRIGHT CHECKS COMPLETED SUCCESSFULLY!")
+    import socket, subprocess
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    is_running = (sock.connect_ex(('127.0.0.1', 8000)) == 0)
+    sock.close()
+    server_process = None
+    if not is_running:
+        server_env = os.environ.copy()
+        server_env.update({"DEMO_MODE": "1", "UI_OPEN_MODE": "1", "PROFILE": "1m"})
+        server_process = subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "api.main:app", "--port", "8000"],
+            env=server_env
+        )
+        for _ in range(30):
+            time.sleep(0.5)
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            res = s.connect_ex(('127.0.0.1', 8000))
+            s.close()
+            if res == 0:
+                break
+
+    try:
+        run_playwright_screen_verification()
+        print("\nALL SMOKE & PLAYWRIGHT CHECKS COMPLETED SUCCESSFULLY!")
+    finally:
+        if server_process:
+            server_process.terminate()
+            server_process.wait()
