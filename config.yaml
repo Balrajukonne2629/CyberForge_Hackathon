@@ -18,6 +18,9 @@ profiles:
     main_db_name: "shop"
     rollup_db_name: "rollup_1m"
     tenant_prefix: "tenant_"
+    expected_counts:
+      orders: 1000000
+      order_items: 1141449
   "10m":
     layout: "per_tenant"
     main_db_url: "postgresql://postgres:postgres@127.0.0.1:5432/shop_10m"
@@ -25,18 +28,27 @@ profiles:
     main_db_name: "shop_10m"
     rollup_db_name: "rollup_10m"
     tenant_prefix: "t10m_"
+    expected_counts:
+      orders: 10000000
+      order_items: 11416141
   "single_1m":
     layout: "single"
     main_db_url: "postgresql://postgres:postgres@127.0.0.1:5432/shop"
     rollup_db_url: "postgresql://postgres:postgres@127.0.0.1:5433/rollup_1m"
     main_db_name: "shop"
     rollup_db_name: "rollup_1m"
+    expected_counts:
+      orders: 1000000
+      order_items: 1141449
   "single_10m":
     layout: "single"
     main_db_url: "postgresql://postgres:postgres@127.0.0.1:5432/shop_10m"
     rollup_db_url: "postgresql://postgres:postgres@127.0.0.1:5433/rollup_10m"
     main_db_name: "shop_10m"
     rollup_db_name: "rollup_10m"
+    expected_counts:
+      orders: 10000000
+      order_items: 11416141
 
 database:
   main_db_url: "postgresql://postgres:postgres@127.0.0.1:5432/shop"

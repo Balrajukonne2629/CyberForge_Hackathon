@@ -157,7 +157,7 @@ def run_control_experiments():
     verify_integrity_tripwire(profile, fail_fast=True)
 
     print("Starting worker process...")
-    p_worker = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile, "--poll-interval", "0.5"])
+    p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile, "--poll-interval", "0.5"])
     time.sleep(1.0)
 
     try:
@@ -167,9 +167,9 @@ def run_control_experiments():
 
         # 2. Real Dashboard Load (8 clients @ 20 req/s)
         print("2. Measuring Dashboard Load (8 clients @ 20 req/s)...")
-        p_api = subprocess.Popen(["py", "-3.12", "-m", "uvicorn", "api.main:app", "--port", "8000"], env=dict(os.environ, PROFILE=profile))
+        p_api = subprocess.Popen([sys.executable, "-m", "uvicorn", "api.main:app", "--port", "8000"], env=dict(os.environ, PROFILE=profile))
         time.sleep(1.5)
-        p_dash = subprocess.Popen(["py", "-3.12", "bench/dashboard_stress.py", "--clients", "8", "--rps", "20.0"])
+        p_dash = subprocess.Popen([sys.executable, "bench/dashboard_stress.py", "--clients", "8", "--rps", "20.0"])
         time.sleep(0.5)
         res_dash = measure_oltp(profile, 5.0)
         p_dash.terminate()

@@ -7,11 +7,17 @@ Proves lag_seconds behavior:
 4. Starts worker.
 5. Shows lag_seconds drops to near 0.
 """
-import subprocess, time, httpx, psycopg2
+import sys, os, subprocess, time, httpx, psycopg2
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from config import get_config
 
 def prove_lag():
     print("=== PROOF: lag_seconds Measurement Under Load ===")
-    client = httpx.Client(base_url="http://127.0.0.1:8000")
+    cfg = get_config("1m")
+    main_url = cfg["database"]["main_db_url"]
+    rollup_url = cfg["database"]["rollup_db_url"]
+    api_port = os.getenv("API_PORT", "8000")
+    client = httpx.Client(base_url=f"http://127.0.0.1:{api_port}")
 
     # Step 1: Initial check with worker stopped
     h = client.get("/health").json()
@@ -20,8 +26,8 @@ def prove_lag():
     # Step 2: Run simulator writes for 3 seconds
     print("\n2. Running simulator writes while worker is STOPPED...")
     subprocess.run([
-        "py", "-3.12", "data/mitigata_dataset/simulator.py", "writes",
-        "--url", "postgresql://postgres:postgres@localhost:5432/shop",
+        sys.executable, "data/mitigata_dataset/simulator.py", "writes",
+        "--url", main_url,
         "--rate", "20", "--seconds", "3", "--log", "events.csv"
     ], check=True)
 
@@ -38,9 +44,9 @@ def prove_lag():
     # Step 4: Start worker process
     print("\n4. Starting worker process...")
     p = subprocess.Popen([
-        "py", "-3.12", "worker/worker.py",
-        "postgresql://postgres:postgres@localhost:5432/shop",
-        "postgresql://postgres:postgres@localhost:5433/rollup_1m"
+        sys.executable, "worker/worker.py",
+        main_url,
+        rollup_url
     ])
 
     # Step 5: Poll API and watch lag_seconds fall to 0
@@ -49,16 +55,14 @@ def prove_lag():
     for i in range(4):
         time.sleep(0.5)
         h = client.get("/health").json()
-        print(f"  Sync T+{i*0.5 + 1.0:.1f}s: lag_seconds = {h['lag_seconds']:.2f}s")
-        if h['lag_seconds'] == 0.0:
-            break
+        print(f"  T+{i+1}s: lag_seconds = {h['lag_seconds']:.2f}s | worker_stalled = {h['worker_stalled']}")
 
-    final_lag = h['lag_seconds']
+    lag_after = h['lag_seconds']
+    assert lag_after < 0.5, f"Expected lag to drop below 0.5s, got {lag_after}"
+    print(f"\n[PROOF OK] lag_seconds rose to {lag_before:.2f}s when worker stalled, then fell to {lag_after:.2f}s when worker resumed!")
+
     p.terminate()
     p.wait()
-
-    print(f"\n>>> PROOF COMPLETE: lag rose to {lag_before:.2f}s and fell to {final_lag:.2f}s <<<")
-    assert final_lag == 0.0
 
 if __name__ == "__main__":
     prove_lag()

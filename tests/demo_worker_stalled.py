@@ -11,12 +11,15 @@ import time, httpx, psycopg2, yaml
 
 def run_demo():
     print("=== Worker Stalled Fail-Closed Demo ===")
-    with open("config.yaml", "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
+    import sys, os
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+    from config import get_config
+    cfg = get_config("1m")
 
     main_url = cfg["database"]["main_db_url"]
-    rollup_url = cfg["database"]["rollup_1m"]
-    api_url = "http://127.0.0.1:8000"
+    rollup_url = cfg["database"]["rollup_db_url"]
+    api_port = os.getenv("API_PORT", "8000")
+    api_url = f"http://127.0.0.1:{api_port}"
 
     client = httpx.Client(base_url=api_url)
 

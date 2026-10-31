@@ -12,7 +12,7 @@ import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from config import get_config, get_tenant_db_name, get_tenant_db_url
+from config import get_config, get_tenant_db_name, get_tenant_db_url, get_admin_db_url
 
 def terminate_connections(cur, db_name: str):
     cur.execute("""
@@ -94,7 +94,7 @@ def split_and_load(profile: str = "1m", tenant_count: int = 100, max_workers: in
         post_load_sql = f.read()
 
     template_db = f"template_tenant_{profile}"
-    admin_conn_url = "postgresql://postgres:postgres@localhost:5432/postgres"
+    admin_conn_url = get_admin_db_url()
 
     # 1. Create Template DB
     print(f"\n[1/5] Creating template database: {template_db} ...")
@@ -109,7 +109,7 @@ def split_and_load(profile: str = "1m", tenant_count: int = 100, max_workers: in
     cur.close()
     conn.close()
 
-    tmpl_conn = psycopg2.connect(f"postgresql://postgres:postgres@localhost:5432/{template_db}")
+    tmpl_conn = psycopg2.connect(get_admin_db_url(db_name=template_db))
     tmpl_conn.autocommit = True
     tmpl_cur = tmpl_conn.cursor()
     tmpl_cur.execute(schema_sql)

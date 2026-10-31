@@ -44,7 +44,7 @@ def main():
     print("=" * 70)
 
     # Start API
-    p_api = subprocess.Popen(["py", "-3.12", "-m", "uvicorn", "api.main:app", "--port", "8000"])
+    p_api = subprocess.Popen([sys.executable, "-m", "uvicorn", "api.main:app", "--port", "8000"])
     time.sleep(2.0)
 
     results = []

@@ -6,7 +6,7 @@
   "status": "pass",
   "visualReview": "pending",
   "artifact": {
-    "path": "C:\\CyberForge Project\\docs\\diagrams\\architecture.html",
+    "path": "docs/diagrams/architecture.html",
     "sha256": "0b4742f3a0c9a76dd4940aee5909b21f7152e533383fc74b093e28c9701b8028",
     "bytes": 732648
   },
@@ -16,7 +16,7 @@
   },
   "chrome": {
     "status": "available",
-    "executable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+    "executable": "chrome"
   },
   "diagnostics": [],
   "containment": {

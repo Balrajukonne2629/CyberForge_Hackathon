@@ -148,6 +148,8 @@ def run_baseline(db_url: str, label: str):
     print("=" * 70)
 
 if __name__ == "__main__":
-    url = sys.argv[1] if len(sys.argv) > 1 else "postgresql://postgres:postgres@localhost:5432/shop"
+    from config import get_config
+    cfg = get_config("1m")
+    url = sys.argv[1] if len(sys.argv) > 1 else cfg["database"]["main_db_url"]
     label = sys.argv[2] if len(sys.argv) > 2 else "1M Dataset"
     run_baseline(url, label)

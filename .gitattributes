@@ -1,0 +1,10 @@
+# Enforce LF line endings for all scripts, SQL, YAML, Python, and markdown files
+* text=auto eol=lf
+*.sh text eol=lf
+*.sql text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.txt text eol=lf

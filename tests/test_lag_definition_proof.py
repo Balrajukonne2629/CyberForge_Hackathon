@@ -31,7 +31,7 @@ def main():
     print("=" * 70)
 
     # Start worker
-    p_worker = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile, "--poll-interval", "0.2"])
+    p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile, "--poll-interval", "0.2"])
     time.sleep(1.5)
     wait_for_worker(profile, tenant_id=tid, timeout=10.0)
 
@@ -99,7 +99,7 @@ def main():
 
         # TEST 3: Restart worker, show lag drops back to 0.0s
         print("\n[TEST 3] Restarting worker...")
-        p_worker = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile, "--poll-interval", "0.2"])
+        p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile, "--poll-interval", "0.2"])
         time.sleep(1.0)
         wait_for_worker(profile, tenant_id=tid, timeout=10.0)
 

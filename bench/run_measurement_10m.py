@@ -158,8 +158,8 @@ def main():
     time.sleep(1.0)
 
     print("\nStarting FastAPI and Worker daemon for profile 10M...")
-    p_api = subprocess.Popen(["py", "-3.12", "-m", "uvicorn", "api.main:app", "--port", "8000"], env=dict(os.environ, PROFILE=profile))
-    p_worker = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile, "--poll-interval", "0.5"])
+    p_api = subprocess.Popen([sys.executable, "-m", "uvicorn", "api.main:app", "--port", "8000"], env=dict(os.environ, PROFILE=profile))
+    p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile, "--poll-interval", "0.5"])
 
     client = httpx.Client(base_url="http://127.0.0.1:8000", timeout=5.0)
     for _ in range(30):

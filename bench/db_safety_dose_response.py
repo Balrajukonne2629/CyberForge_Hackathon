@@ -77,12 +77,12 @@ def get_pg_stat_metrics(profile: str = "1m"):
 def run_dose_step(clients: int, profile: str = "1m", duration: float = 6.0):
     setup_pg_stat_statements(profile)
 
-    p_worker = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile, "--poll-interval", "0.5"])
+    p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile, "--poll-interval", "0.5"])
     time.sleep(1.0)
 
     p_dash = None
     if clients > 0:
-        p_dash = subprocess.Popen(["py", "-3.12", "bench/dashboard_stress.py", "--clients", str(clients), "--rps", "20.0"])
+        p_dash = subprocess.Popen([sys.executable, "bench/dashboard_stress.py", "--clients", str(clients), "--rps", "20.0"])
         time.sleep(1.0)
 
     oltp_lats = []
@@ -196,7 +196,7 @@ def main():
     verify_integrity_tripwire(profile, fail_fast=True)
 
     print("Starting FastAPI server for dose-response test...")
-    p_api = subprocess.Popen(["py", "-3.12", "-m", "uvicorn", "api.main:app", "--port", "8000"], env=dict(os.environ, PROFILE=profile))
+    p_api = subprocess.Popen([sys.executable, "-m", "uvicorn", "api.main:app", "--port", "8000"], env=dict(os.environ, PROFILE=profile))
     time.sleep(2.0)
 
     client_levels = [0, 1, 2, 8, 32]

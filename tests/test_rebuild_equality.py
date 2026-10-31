@@ -21,7 +21,7 @@ def run_rebuild_equality_test(profile: str = "1m") -> bool:
     test_tenants = [1, 42, 99]
 
     # Start worker process
-    p = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile])
+    p = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile])
     time.sleep(1.0)
 
     try:

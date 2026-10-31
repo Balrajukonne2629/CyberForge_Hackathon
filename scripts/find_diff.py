@@ -1,7 +1,10 @@
-import psycopg2
+import psycopg2, os, sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from config import get_config
 
-conn_m = psycopg2.connect("postgresql://postgres:postgres@localhost:5432/shop")
-conn_r = psycopg2.connect("postgresql://postgres:postgres@localhost:5433/rollup_1m")
+cfg = get_config("1m")
+conn_m = psycopg2.connect(cfg["database"]["main_db_url"])
+conn_r = psycopg2.connect(cfg["database"]["rollup_db_url"])
 cur_m = conn_m.cursor()
 cur_r = conn_r.cursor()
 

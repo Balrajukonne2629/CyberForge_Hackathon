@@ -71,14 +71,14 @@ def setup_10m():
     if h_cnt == 0:
         print("\n4. Populating rollups via rebuild.py (snapshot aggregate)...")
         t0 = time.time()
-        subprocess.run(["py", "-3.12", "scripts/rebuild.py", main_url, rollup_url], check=True)
+        subprocess.run([sys.executable, "scripts/rebuild.py", main_url, rollup_url], check=True)
         print(f"  Rebuild completed in {time.time() - t0:.2f}s.")
     else:
         print(f"\n4. Rollup already populated ({h_cnt:,} hours). Skipping full rebuild.")
 
     # 5. Report sizes
     print("\n5. Reporting storage footprint...")
-    subprocess.run(["py", "-3.12", "scripts/report_sizes.py", "10m"], check=True)
+    subprocess.run([sys.executable, "scripts/report_sizes.py", "10m"], check=True)
 
     print("\n" + "=" * 60)
     print("10M SETUP COMPLETE AND READY FOR WORKER & API")

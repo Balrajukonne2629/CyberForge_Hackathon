@@ -52,10 +52,13 @@ def get_hardware_info() -> Dict[str, str]:
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
 
+API_PORT = os.getenv("API_PORT", "8000")
+DEFAULT_BASE_URL = f"http://127.0.0.1:{API_PORT}"
+
 # ---------------------------------------------------------------------------
 # 1. Query Speed Benchmark (Reads ONLY from Rollup DB)
 # ---------------------------------------------------------------------------
-def benchmark_queries(profile: str = "1m", base_url: str = "http://127.0.0.1:8000") -> Dict[str, Dict[str, float]]:
+def benchmark_queries(profile: str = "1m", base_url: str = DEFAULT_BASE_URL) -> Dict[str, Dict[str, float]]:
     print(f"\n--- Running Query Speed Benchmark (Profile: {profile.upper()}) ---")
     client = httpx.Client(base_url=base_url, timeout=30.0)
     tenants = [1, 99, 42, 77, 2, 5, 10, 25, 50, 90]
@@ -108,7 +111,7 @@ def benchmark_queries(profile: str = "1m", base_url: str = "http://127.0.0.1:800
 # ---------------------------------------------------------------------------
 # 2. Freshness Probe Benchmark (50 probes across random tenants)
 # ---------------------------------------------------------------------------
-def benchmark_freshness(profile: str = "1m", base_url: str = "http://127.0.0.1:8000", count: int = 50) -> Dict[str, float]:
+def benchmark_freshness(profile: str = "1m", base_url: str = DEFAULT_BASE_URL, count: int = 50) -> Dict[str, float]:
     print(f"\n--- Running Freshness Probe Benchmark ({count} probes across random tenants) ---")
     client = httpx.Client(base_url=base_url, timeout=10.0)
     rng = random.Random(42)
@@ -241,7 +244,7 @@ def benchmark_db_safety(profile: str = "1m", duration: float = 6.0) -> Dict[str,
         print(f"    (a) Baseline OLTP: {tput_a:.1f} writes/s")
 
         # (b) Triggers ON + Multi-Tenant Worker ON
-        p_worker = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile])
+        p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile])
         time.sleep(1.0)
         lat_b = []
         cnt_b = [0]
@@ -455,22 +458,22 @@ def run_benchmarks(profile: str = "1m"):
     # 1. Start worker and API if needed
     p_api = None
     try:
-        httpx.get("http://127.0.0.1:8000/health", timeout=1.0)
+        httpx.get(f"{DEFAULT_BASE_URL}/health", timeout=1.0)
     except Exception:
-        print("Starting FastAPI server for benchmarks on port 8000...")
-        p_api = subprocess.Popen(["py", "-3.12", "-m", "uvicorn", "api.main:app", "--port", "8000"])
+        print(f"Starting FastAPI server for benchmarks on port {API_PORT}...")
+        p_api = subprocess.Popen([sys.executable, "-m", "uvicorn", "api.main:app", "--port", str(API_PORT)], env=dict(os.environ, PROFILE=profile))
         time.sleep(2.0)
 
     print("Starting background worker for benchmarks...")
-    p_worker = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile])
+    p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile])
     time.sleep(1.5)
 
     try:
         # 1. Query benchmark
-        queries = benchmark_queries(profile)
+        queries = benchmark_queries(profile, base_url=DEFAULT_BASE_URL)
 
         # 2. Freshness benchmark
-        freshness = benchmark_freshness(profile, count=50)
+        freshness = benchmark_freshness(profile, base_url=DEFAULT_BASE_URL, count=50)
 
         # Stop worker before DB safety test so DB safety controls worker
         p_worker.terminate()

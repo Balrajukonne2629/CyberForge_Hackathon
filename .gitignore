@@ -1,8 +1,37 @@
+# Python cache and build artifacts
 __pycache__/
-*.pyc
-*.pyo
-.env
+*.py[cod]
+*$py.class
+*.so
 .pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Environment files and credentials
+.env
+.env.*
+
+# Datasets and archives
+data/
+*.zip
+*.tar
+*.gz
+*.csv
 events.csv
 events*.csv
-data/
+
+# Database dumps and logs
+*.dump
+*.sql.dump
+*.log
+logs/
+
+# Node / JS artifacts
+node_modules/
+
+# Docker volumes and temp files
+.docker/
+docker-volumes/

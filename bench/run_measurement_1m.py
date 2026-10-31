@@ -26,8 +26,8 @@ def main():
 
     # 1. Start API and Worker
     print("\n[1] Starting API and Worker daemon for profile 1m...")
-    p_api = subprocess.Popen(["py", "-3.12", "-m", "uvicorn", "api.main:app", "--port", "8000"])
-    p_worker = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile])
+    p_api = subprocess.Popen([sys.executable, "-m", "uvicorn", "api.main:app", "--port", "8000"])
+    p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile])
 
     # Wait for API ready
     client = httpx.Client(base_url="http://127.0.0.1:8000", timeout=5.0)

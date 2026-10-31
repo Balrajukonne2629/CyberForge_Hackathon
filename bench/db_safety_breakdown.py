@@ -123,12 +123,12 @@ def run_single_measurement(
 
     p_worker = None
     if has_worker:
-        p_worker = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile, "--poll-interval", str(poll_interval)])
+        p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile, "--poll-interval", str(poll_interval)])
         time.sleep(1.0)
 
     p_dashboard = None
     if dashboard_clients > 0:
-        p_dashboard = subprocess.Popen(["py", "-3.12", "bench/dashboard_stress.py", "--clients", str(dashboard_clients), "--rps", "20.0"])
+        p_dashboard = subprocess.Popen([sys.executable, "bench/dashboard_stress.py", "--clients", str(dashboard_clients), "--rps", "20.0"])
         time.sleep(0.5)
 
     oltp_latencies = []
@@ -263,7 +263,7 @@ def run_benchmark_breakdown(profile: str = "1m", repeats: int = 5, duration: flo
 
     # 2. Start FastAPI server for dashboard simulation
     print("Starting FastAPI server for dashboard client simulation...")
-    p_api = subprocess.Popen(["py", "-3.12", "-m", "uvicorn", "api.main:app", "--port", "8000"])
+    p_api = subprocess.Popen([sys.executable, "-m", "uvicorn", "api.main:app", "--port", "8000"])
     client = httpx.Client(base_url="http://127.0.0.1:8000", timeout=5.0)
     for _ in range(30):
         try:

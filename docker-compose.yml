@@ -1,12 +1,12 @@
 services:
   main-db:
     image: postgres:16-alpine
-    container_name: cyberforge-main-db
+    container_name: ${COMPOSE_PROJECT_NAME:-cyberforge}-main-db
     restart: unless-stopped
     shm_size: 1g
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${MAIN_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${MAIN_DB_PASSWORD:-postgres}
       POSTGRES_DB: shop
     command: >
       postgres
@@ -19,35 +19,36 @@ services:
       -c checkpoint_completion_target=0.9
       -c max_wal_size=4GB
     ports:
-      - "5432:5432"
+      - "${MAIN_DB_PORT:-5432}:5432"
     volumes:
       - main_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d shop"]
+      test: ["CMD-SHELL", "pg_isready -U ${MAIN_DB_USER:-postgres} -d shop"]
       interval: 3s
       timeout: 3s
       retries: 10
 
   rollup-db:
     image: postgres:16-alpine
-    container_name: cyberforge-rollup-db
+    container_name: ${COMPOSE_PROJECT_NAME:-cyberforge}-rollup-db
     restart: unless-stopped
     shm_size: 1g
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${ROLLUP_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${ROLLUP_DB_PASSWORD:-postgres}
       POSTGRES_DB: rollup_1m
     command: >
       postgres
+      -c max_connections=300
       -c shared_buffers=512MB
       -c work_mem=32MB
       -c maintenance_work_mem=256MB
     ports:
-      - "5433:5432"
+      - "${ROLLUP_DB_PORT:-5433}:5432"
     volumes:
       - rollup_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d rollup_1m"]
+      test: ["CMD-SHELL", "pg_isready -U ${ROLLUP_DB_USER:-postgres} -d rollup_1m"]
       interval: 3s
       timeout: 3s
       retries: 10
@@ -56,26 +57,26 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: cyberforge-api
+    container_name: ${COMPOSE_PROJECT_NAME:-cyberforge}-api
     restart: unless-stopped
     environment:
-      ROLLUP_DB_URL: "postgresql://postgres:postgres@rollup-db:5432/rollup_1m"
+      ROLLUP_DB_URL: "postgresql://${ROLLUP_DB_USER:-postgres}:${ROLLUP_DB_PASSWORD:-postgres}@rollup-db:5432/rollup_1m"
     command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     depends_on:
       rollup-db:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
 
   worker:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: cyberforge-worker
+    container_name: ${COMPOSE_PROJECT_NAME:-cyberforge}-worker
     restart: unless-stopped
     environment:
-      MAIN_DB_URL: "postgresql://postgres:postgres@main-db:5432/shop"
-      ROLLUP_DB_URL: "postgresql://postgres:postgres@rollup-db:5432/rollup_1m"
+      MAIN_DB_URL: "postgresql://${MAIN_DB_USER:-postgres}:${MAIN_DB_PASSWORD:-postgres}@main-db:5432/shop"
+      ROLLUP_DB_URL: "postgresql://${ROLLUP_DB_USER:-postgres}:${ROLLUP_DB_PASSWORD:-postgres}@rollup-db:5432/rollup_1m"
     command: ["python", "worker/worker.py"]
     depends_on:
       main-db:

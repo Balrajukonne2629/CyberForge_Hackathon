@@ -22,7 +22,7 @@ def run_crash_recovery_test(profile: str = "1m") -> bool:
 
     # 1. Start worker subprocess
     print("1. Starting worker process...")
-    p = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile])
+    p = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile])
     time.sleep(1.5)
 
     base_id = 999_888_000
@@ -88,7 +88,7 @@ def run_crash_recovery_test(profile: str = "1m") -> bool:
 
         # 5. Restart worker
         print("5. Restarting worker to recover...")
-        p2 = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile])
+        p2 = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile])
 
         for tid in test_tenants:
             wait_for_worker(profile, tenant_id=tid, timeout=15.0)

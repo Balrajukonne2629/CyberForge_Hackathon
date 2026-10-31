@@ -61,13 +61,15 @@ def run_all(profile: str):
         pass
     time.sleep(1.0)
 
-    print(f"Starting FastAPI server on port 8000 (profile: {profile})...")
-    p_api = subprocess.Popen(["py", "-3.12", "-m", "uvicorn", "api.main:app", "--port", "8000"], env=dict(os.environ, PROFILE=profile))
-    wait_for_api_ready("http://127.0.0.1:8000")
+    api_port = os.getenv("API_PORT", "8000")
+    api_url = f"http://127.0.0.1:{api_port}"
+    print(f"Starting FastAPI server on port {api_port} (profile: {profile})...")
+    p_api = subprocess.Popen([sys.executable, "-m", "uvicorn", "api.main:app", "--port", str(api_port)], env=dict(os.environ, PROFILE=profile))
+    wait_for_api_ready(api_url)
 
     # 3. Start unified runner worker daemon
     print("Starting background multi-tenant rollup worker...")
-    p_worker = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile])
+    p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile])
     time.sleep(1.5)
     wait_for_worker(profile, timeout=15.0)
 
@@ -82,7 +84,7 @@ def run_all(profile: str):
         nonlocal p_worker
         reset_all_worker_state(rollup_url)
         if p_worker is None or p_worker.poll() is not None:
-            p_worker = subprocess.Popen(["py", "-3.12", "worker/worker.py", "--profile", profile])
+            p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile])
             time.sleep(1.5)
 
     # All 11 suites as required

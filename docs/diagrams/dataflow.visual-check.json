@@ -6,7 +6,7 @@
   "status": "pass",
   "visualReview": "pending",
   "artifact": {
-    "path": "C:\\CyberForge Project\\docs\\diagrams\\dataflow.html",
+    "path": "docs/diagrams/dataflow.html",
     "sha256": "fdb995c1757e8cdb728a360d536c1949784d2e93b4c7bbeefb1ffcd21e21b305",
     "bytes": 742362
   },
@@ -16,7 +16,7 @@
   },
   "chrome": {
     "status": "available",
-    "executable": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+    "executable": "chrome"
   },
   "diagnostics": [],
   "containment": {

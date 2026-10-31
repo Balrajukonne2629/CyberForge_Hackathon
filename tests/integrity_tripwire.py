@@ -2,24 +2,13 @@
 """tests/integrity_tripwire.py:
 Strict Data Integrity Tripwire:
 Sums orders and order_items across all 100 tenant databases for a given profile.
-Compares against the exact CSV source line counts.
+Compares against the exact expected counts from config.yaml.
 Fails loudly and non-zero on any discrepancy.
 """
 import sys, os, time, psycopg2
 from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from config import get_tenant_db_url
-
-EXPECTED_COUNTS = {
-    "1m": {
-        "orders": 1_000_000,
-        "order_items": 1_141_449,
-    },
-    "10m": {
-        "orders": 10_000_000,
-        "order_items": 11_416_141,
-    }
-}
+from config import get_config, get_tenant_db_url
 
 def check_tenant(tid: int, profile: str):
     url = get_tenant_db_url(tid, profile)
@@ -34,9 +23,11 @@ def check_tenant(tid: int, profile: str):
     return orders, items
 
 def verify_integrity_tripwire(profile: str = "1m", fail_fast: bool = True) -> bool:
-    expected = EXPECTED_COUNTS.get(profile.lower())
+    cfg = get_config(profile)
+    prof_data = cfg.get("profiles", {}).get(profile.lower(), {})
+    expected = prof_data.get("expected_counts")
     if not expected:
-        raise ValueError(f"Unknown profile: {profile}")
+        raise ValueError(f"No expected_counts configured for profile: {profile}")
 
     print(f"\n[TRIPWIRE] Verifying dataset integrity across 100 tenant DBs (profile: {profile})...")
     t0 = time.time()
