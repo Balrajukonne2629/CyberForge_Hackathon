@@ -38,7 +38,7 @@ def run_fail_closed_test(profile: str = "1m") -> bool:
     r_cur = r_conn.cursor()
 
     bad_id = None
-    oid = 555_001
+    oid = 955_000_001
 
     try:
         # 1. Clean prior state

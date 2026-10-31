@@ -18,6 +18,7 @@ from tests.test_crash_recovery import run_crash_recovery_test
 from tests.test_fail_closed import run_fail_closed_test
 from tests.test_rebuild_equality import run_rebuild_equality_test
 from tests.test_golden_parity import run_golden_check
+from tests.integrity_tripwire import verify_integrity_tripwire
 from tests.sync import wait_for_worker
 from config import get_config
 
@@ -52,15 +53,17 @@ def run_all(profile: str):
     # 1. Reset worker states in rollup-db
     reset_all_worker_state(rollup_url)
 
-    # 2. Start API if not running
+    # 2. Restart API cleanly for the requested profile
     p_api = None
     try:
-        r = httpx.get("http://127.0.0.1:8000/health", timeout=1.0)
-        print("Existing API server detected on port 8000.")
+        subprocess.run(["powershell", "-Command", "Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*uvicorn*' } | Stop-Process -Force"], timeout=5)
     except Exception:
-        print("Starting FastAPI server on port 8000...")
-        p_api = subprocess.Popen(["py", "-3.12", "-m", "uvicorn", "api.main:app", "--port", "8000"])
-        wait_for_api_ready("http://127.0.0.1:8000")
+        pass
+    time.sleep(1.0)
+
+    print(f"Starting FastAPI server on port 8000 (profile: {profile})...")
+    p_api = subprocess.Popen(["py", "-3.12", "-m", "uvicorn", "api.main:app", "--port", "8000"], env=dict(os.environ, PROFILE=profile))
+    wait_for_api_ready("http://127.0.0.1:8000")
 
     # 3. Start unified runner worker daemon
     print("Starting background multi-tenant rollup worker...")
@@ -136,6 +139,15 @@ def run_all(profile: str):
         if p_api and p_api.poll() is None:
             p_api.terminate()
             p_api.wait()
+
+    # Strict dataset integrity tripwire check
+    print("\n>>> Running Final Data Integrity Tripwire Check...")
+    tripwire_ok = verify_integrity_tripwire(profile, fail_fast=False)
+    if not tripwire_ok:
+        failed = True
+        results.append(("12. Dataset Integrity Tripwire", "FAIL", 0.0))
+    else:
+        results.append(("12. Dataset Integrity Tripwire", "PASS", 0.0))
 
     print("\n" + "=" * 70)
     print(f"TEST SUITE SUMMARY ({profile.upper()}):")

@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from bench.bench import benchmark_queries, benchmark_freshness, get_hardware_info
 from scripts.report_sizes import report_sizes
+from tests.integrity_tripwire import verify_integrity_tripwire
 
 def main():
     profile = "1m"
@@ -19,6 +20,9 @@ def main():
     print("BENCHMARK ITEM D: FRESH MEASUREMENTS ON FULL 1M DATASET")
     print("Profile: 1m | Date:", time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()))
     print("=" * 70)
+
+    # Tripwire check at start of benchmark
+    verify_integrity_tripwire(profile, fail_fast=True)
 
     # 1. Start API and Worker
     print("\n[1] Starting API and Worker daemon for profile 1m...")

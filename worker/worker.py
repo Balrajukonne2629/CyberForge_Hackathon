@@ -415,7 +415,7 @@ if __name__ == "__main__":
     parser.add_argument("--worker-id", type=int, default=int(os.getenv("WORKER_ID", "0")), help="Worker ID for sharding")
     parser.add_argument("--worker-count", type=int, default=int(os.getenv("WORKER_COUNT", "1")), help="Total workers for sharding")
     parser.add_argument("--batch-cap", type=int, default=500, help="Max rows per tenant visit")
-    parser.add_argument("--poll-interval", type=float, default=0.05, help="Idle sleep interval (seconds)")
+    parser.add_argument("--poll-interval", type=float, default=0.5, help="Idle sleep interval (seconds, default: 500ms)")
     parser.add_argument("--benchmark-cycles", action="store_true", help="Run cycle time benchmark for 10, 50, 100 tenants")
     args = parser.parse_args()
 

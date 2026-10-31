@@ -33,8 +33,8 @@ def run_rebuild_equality_test(profile: str = "1m") -> bool:
             t_conn.autocommit = True
             t_cur = t_conn.cursor()
 
-            # Disjoint ID space far above dataset range (max dataset id is ~1.14M)
-            base_oid = 95_000_000 + (tid * 1000)
+            # Disjoint ID space far above dataset range (900M+)
+            base_oid = 960_000_000 + (tid * 1000)
 
             # Get valid product for this tenant
             t_cur.execute("SELECT product_id, price FROM products WHERE tenant_id = %s LIMIT 1", (tid,))

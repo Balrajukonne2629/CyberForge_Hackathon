@@ -41,8 +41,8 @@ def run_out_of_order_test(profile: str = "1m"):
         pid = p_row[0] if p_row else 1
 
         test_hour = datetime.datetime(2026, 10, 27, 10, 0, 0)
-        oid1, iid1 = 98_888_000 + tid, 98_888_000 + tid
-        oid2, iid2 = 98_999_000 + tid, 98_999_000 + tid
+        oid1, iid1 = 988_888_000 + tid, 988_888_000 + tid
+        oid2, iid2 = 988_999_000 + tid, 988_999_000 + tid
 
         clean_cur.execute("DELETE FROM order_items WHERE item_id IN (%s, %s)", (iid1, iid2))
         clean_cur.execute("DELETE FROM orders WHERE order_id IN (%s, %s)", (oid1, oid2))

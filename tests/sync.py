@@ -20,25 +20,34 @@ def wait_for_worker(
     r_url = rollup_url or cfg["database"]["rollup_db_url"]
     target_tids: List[int] = [tenant_id] if tenant_id is not None else get_all_tenant_ids(100)
 
-    t0 = time.time()
-    r_conn = psycopg2.connect(r_url)
-    r_conn.autocommit = True
-    r_cur = r_conn.cursor()
+    from concurrent.futures import ThreadPoolExecutor
 
-    # Collect max outbox id per target tenant
-    max_ids = {}
-    for tid in target_tids:
+    # Collect max outbox id per target tenant in parallel
+    def fetch_max_id(tid: int):
         try:
             t_url = get_tenant_db_url(tid, prof)
             tc = psycopg2.connect(t_url)
             tcur = tc.cursor()
             tcur.execute("SELECT COALESCE(MAX(id), 0) FROM outbox")
-            max_ids[tid] = tcur.fetchone()[0]
+            m = tcur.fetchone()[0]
             tcur.close()
             tc.close()
+            return tid, m
         except Exception:
-            max_ids[tid] = 0
+            return tid, 0
 
+    max_ids = {}
+    with ThreadPoolExecutor(max_workers=25) as executor:
+        for tid, m in executor.map(fetch_max_id, target_tids):
+            max_ids[tid] = m
+
+    r_conn = psycopg2.connect(r_url)
+    r_conn.autocommit = True
+    r_cur = r_conn.cursor()
+
+    t0 = time.time()
+    all_caught_up = False
+    states = {}
     while time.time() - t0 < timeout:
         r_cur.execute("""
             SELECT tenant_id, cursor_id, stalled, last_error 

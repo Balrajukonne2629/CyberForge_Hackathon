@@ -17,7 +17,8 @@ import asyncpg
 
 from config import get_config
 
-cfg = get_config()
+profile = os.getenv("PROFILE", "1m")
+cfg = get_config(profile)
 ROLLUP_DB_URL = cfg["database"]["rollup_db_url"]
 ADMIN_KEY = cfg.get("auth", {}).get("admin_key", "admin-secret-key-12345")
 

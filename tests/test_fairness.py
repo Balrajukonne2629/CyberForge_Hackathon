@@ -60,7 +60,7 @@ def run_fairness_test(profile: str = "1m", flood_count: int = 1000) -> bool:
         c = psycopg2.connect(ourl)
         c.autocommit = True
         cur = c.cursor()
-        oid = 444_000 + otid
+        oid = 944_000_000 + otid
         observer_oids[otid] = oid
         cur.execute("DELETE FROM order_items WHERE order_id = %s", (oid,))
         cur.execute("DELETE FROM orders WHERE order_id = %s", (oid,))

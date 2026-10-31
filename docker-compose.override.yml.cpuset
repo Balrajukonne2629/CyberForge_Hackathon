@@ -1,0 +1,8 @@
+# docker-compose.override.yml.cpuset
+# Optional CPU Pinning profile for isolating OLTP database and Rollup/API engines
+services:
+  main-db:
+    cpuset: "0-5"
+
+  rollup-db:
+    cpuset: "6-11"

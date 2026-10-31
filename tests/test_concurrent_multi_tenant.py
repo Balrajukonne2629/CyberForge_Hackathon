@@ -19,9 +19,9 @@ def mutate_single_tenant(tid: int, profile: str = "1m"):
     conn.autocommit = True
     cur = conn.cursor()
 
-    # Disjoint ID space above dataset range
-    oid = 85_000_000 + tid
-    iid = 85_000_000 + tid
+    # Disjoint ID space above dataset range (900M+)
+    oid = 950_000_000 + tid
+    iid = 950_000_000 + tid
     ts1 = datetime.datetime(2026, 10, 25, 12, 0, 0)
     ts2 = datetime.datetime(2026, 10, 26, 15, 0, 0)
 
@@ -72,10 +72,10 @@ def run_concurrent_multi_tenant_test(profile: str = "1m", tenant_count: int = 25
     excluded = tuple(cfg["business_rules"]["excluded_statuses"])
     target_tids = list(range(1, tenant_count + 1))
 
-    # Execute mutations across 25 tenants concurrently
-    print(f"Executing concurrent mutations on {len(target_tids)} tenant DBs in parallel...")
+    # Execute mutations across 25 tenants concurrently with 25 threads
+    print(f"Executing concurrent mutations on {len(target_tids)} tenant DBs in parallel (25 threads)...")
     t0 = time.time()
-    with ThreadPoolExecutor(max_workers=12) as executor:
+    with ThreadPoolExecutor(max_workers=25) as executor:
         results = list(executor.map(lambda t: mutate_single_tenant(t, profile), target_tids))
     print(f"Mutations finished on {len(results)} tenant DBs in {time.time() - t0:.2f}s")
 
