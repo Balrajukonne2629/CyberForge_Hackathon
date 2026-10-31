@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Multi-Tenant Data Pipeline & Aggregation Flow",
+    "output": "docs/diagrams/dataflow.html",
+    "viewBox": [1080, 510],
+    "quality_profile": "showcase",
+    "animation": "trace",
+    "views": [
+      {
+        "id": "ingest-pipeline",
+        "label": "CDC Ingestion Pipeline",
+        "focus": ["client_app", "simulator", "main_oltp", "outbox_log", "worker_engine", "rollup_orders", "rollup_products"],
+        "note": "Mutations to the main OLTP database emit signed diffs via AFTER triggers; the worker batches and folds into rollups."
+      },
+      {
+        "id": "serving-pipeline",
+        "label": "Tenant Query Serving",
+        "focus": ["rollup_orders", "rollup_products", "fastapi_gateway", "store_dashboards"],
+        "note": "Tenant dashboard queries are answered exclusively from rollups in sub-100ms without touching the OLTP store."
+      },
+      {
+        "id": "quarantine-pipeline",
+        "label": "Quarantine & Isolation",
+        "focus": ["worker_engine", "quarantine_store"],
+        "note": "Malformed records or check constraint violations are safely isolated without halting the main pipeline."
+      }
+    ]
+  },
+  "stages": [
+    { "label": "Data Sources" },
+    { "label": "OLTP Capture" },
+    { "label": "Processing" },
+    { "label": "Rollup Storage" },
+    { "label": "Consumers" }
+  ],
+  "nodes": [
+    {
+      "id": "client_app",
+      "type": "frontend",
+      "label": "Store Clients",
+      "sublabel": "Orders & Cancels",
+      "width": 130,
+      "yOffset": -7,
+      "stage": 0,
+      "row": 1,
+      "tag": "writes"
+    },
+    {
+      "id": "simulator",
+      "type": "external",
+      "label": "Simulator",
+      "sublabel": "Load & Updates",
+      "width": 130,
+      "stage": 0,
+      "row": 2,
+      "tag": "bench harness"
+    },
+    {
+      "id": "main_oltp",
+      "type": "database",
+      "label": "Main OLTP DB",
+      "sublabel": "PostgreSQL 16",
+      "brand": "postgresql",
+      "width": 130,
+      "stage": 1,
+      "row": 1,
+      "tag": "10M orders"
+    },
+    {
+      "id": "outbox_log",
+      "type": "messagebus",
+      "label": "Outbox Buffer",
+      "sublabel": "Signed Diffs (+1/-1)",
+      "width": 130,
+      "stage": 1,
+      "row": 2,
+      "tag": "xid8 ordered"
+    },
+    {
+      "id": "worker_engine",
+      "type": "backend",
+      "label": "CDC Worker",
+      "sublabel": "In-Memory Fold",
+      "brand": "docker",
+      "width": 130,
+      "stage": 2,
+      "row": 1,
+      "tag": "safe snapshot"
+    },
+    {
+      "id": "quarantine_store",
+      "type": "security",
+      "label": "Quarantine Log",
+      "sublabel": "Malformed Rows",
+      "width": 130,
+      "stage": 3,
+      "row": 0,
+      "tag": "fail-safe"
+    },
+    {
+      "id": "rollup_orders",
+      "type": "database",
+      "label": "Hourly Orders",
+      "sublabel": "rollup_orders_hour",
+      "brand": "postgresql",
+      "width": 130,
+      "stage": 3,
+      "row": 1,
+      "tag": "hourly status"
+    },
+    {
+      "id": "rollup_products",
+      "type": "database",
+      "label": "Daily Rollup",
+      "sublabel": "rollup_product_day",
+      "brand": "postgresql",
+      "width": 130,
+      "stage": 3,
+      "row": 2,
+      "tag": "daily top-N"
+    },
+    {
+      "id": "fastapi_gateway",
+      "type": "backend",
+      "label": "FastAPI Service",
+      "sublabel": "Auth & Rate Limit",
+      "brand": "fastapi",
+      "width": 130,
+      "stage": 4,
+      "row": 1,
+      "tag": ":8000"
+    },
+    {
+      "id": "store_dashboards",
+      "type": "frontend",
+      "label": "Store Dashboards",
+      "sublabel": "p95 < 100ms",
+      "width": 130,
+      "stage": 4,
+      "row": 2,
+      "tag": "tenant UI"
+    }
+  ],
+  "flows": [
+    {
+      "id": "flow-client-oltp",
+      "from": "client_app",
+      "to": "main_oltp",
+      "label": "order mutations",
+      "classification": "OLTP writes",
+      "variant": "default"
+    },
+    {
+      "id": "flow-sim-oltp",
+      "from": "simulator",
+      "to": "main_oltp",
+      "label": "simulated bursts",
+      "classification": "test writes",
+      "variant": "default"
+    },
+    {
+      "id": "flow-trigger-outbox",
+      "from": "main_oltp",
+      "to": "outbox_log",
+      "label": "AFTER triggers",
+      "classification": "signed diffs",
+      "variant": "emphasis",
+      "labelAt": [315, 314]
+    },
+    {
+      "id": "flow-batch-worker",
+      "from": "outbox_log",
+      "to": "worker_engine",
+      "label": "safe-xid batch",
+      "classification": "pg_snapshot_xmin",
+      "variant": "emphasis"
+    },
+    {
+      "id": "flow-worker-quarantine",
+      "from": "worker_engine",
+      "to": "quarantine_store",
+      "label": "bad rows",
+      "classification": "isolated",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "left",
+      "via": [[530, 157]],
+      "labelAt": [575, 145]
+    },
+    {
+      "id": "flow-worker-orders",
+      "from": "worker_engine",
+      "to": "rollup_orders",
+      "label": "hourly fold",
+      "classification": "hourly aggregate",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelAt": [638, 225]
+    },
+    {
+      "id": "flow-worker-products",
+      "from": "worker_engine",
+      "to": "rollup_products",
+      "label": "daily fold",
+      "classification": "daily top-N",
+      "variant": "emphasis"
+    },
+    {
+      "id": "flow-orders-api",
+      "from": "rollup_orders",
+      "to": "fastapi_gateway",
+      "label": "hourly sum",
+      "classification": "read-only",
+      "variant": "default",
+      "route": "straight",
+      "labelAt": [825, 225]
+    },
+    {
+      "id": "flow-products-api",
+      "from": "rollup_products",
+      "to": "fastapi_gateway",
+      "label": "top-N query",
+      "classification": "read-only",
+      "variant": "default",
+      "fromSide": "right",
+      "toSide": "top",
+      "via": [[865, 385], [865, 180], [960, 180]],
+      "labelAt": [865, 314]
+    },
+    {
+      "id": "flow-api-dash",
+      "from": "fastapi_gateway",
+      "to": "store_dashboards",
+      "label": "fresh analytics",
+      "classification": "served response",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [960, 328]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "CDC Ingestion Flow",
+      "items": [
+        "Store clients commit transactions directly to PostgreSQL OLTP without latency overhead",
+        "Statement-level AFTER triggers write signed diff rows (+1 / -1) with xid8 transaction IDs",
+        "CDC Worker reads batches below pg_snapshot_xmin to guarantee cross-transaction consistency"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "In-Memory Fold & Rollup Storage",
+      "items": [
+        "Worker folds batch records in memory into a single upsert per dimension key",
+        "Rollup tables maintain hourly order status counts and daily product sales rollups",
+        "Fail-closed CHECK constraints safeguard counter sanity and quarantine rejects"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "High-Performance Read Flow",
+      "items": [
+        "FastAPI enforces tenant isolation via X-Tenant-Key on every dashboard metric query",
+        "Aggregation queries scan compact pre-aggregated rows instead of 10M raw rows",
+        "P95 query response time stays under 100ms with zero contention on primary OLTP"
+      ]
+    }
+  ]
+}

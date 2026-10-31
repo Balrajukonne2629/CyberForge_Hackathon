@@ -5,6 +5,8 @@ Verifies changes reach the rollups with exact numbers.
 """
 import sys, time, datetime, yaml, psycopg2
 
+from tests.sync import wait_for_worker
+
 def run_mutations(main_url: str, rollup_url: str):
     print("=== Running Comprehensive Mutation & Fan-Out Tests ===")
     
@@ -34,10 +36,10 @@ def run_mutations(main_url: str, rollup_url: str):
     # Clean up any leftover test data
     main_cur.execute("DELETE FROM order_items WHERE order_id = %s", (test_order_id,))
     main_cur.execute("DELETE FROM orders WHERE order_id = %s", (test_order_id,))
-    time.sleep(0.5)
+    wait_for_worker(main_url, rollup_url)
 
     def wait_worker_sync():
-        time.sleep(0.5)
+        wait_for_worker(main_url, rollup_url)
 
     # 1. INSERT new order with 'delivered' status
     print("\n[TEST 1] Inserting new delivered order (300.00, 2 units)...")

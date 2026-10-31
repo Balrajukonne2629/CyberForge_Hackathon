@@ -77,7 +77,9 @@ def run_worker(main_url: str, rollup_url: str, batch_size: int = 5000, poll_inte
                 rollup_cur.execute("""
                     UPDATE worker_state SET 
                         heartbeat = clock_timestamp(),
-                        lag_seconds = 0.0
+                        lag_seconds = 0.0,
+                        has_pending = false,
+                        oldest_pending_ts = NULL
                     WHERE id = 1
                 """)
                 rollup_conn.commit()
@@ -144,15 +146,24 @@ def run_worker(main_url: str, rollup_url: str, batch_size: int = 5000, poll_inte
                     items_folded[key]["units"] += d_cnt
                     items_folded[key]["sales"] += float(d_amt)
 
-            # Calculate lag
-            lag_sec = 0.0
-            if latest_row_created:
-                # Naive or UTC timestamp difference
-                if latest_row_created.tzinfo is None:
-                    dt = datetime.datetime.now() - latest_row_created
-                else:
-                    dt = now_ts - latest_row_created
-                lag_sec = max(0.0, round(dt.total_seconds(), 2))
+            # Check if outbox has further pending rows
+            main_cur.execute("""
+                SELECT created_at FROM outbox
+                WHERE xid < pg_snapshot_xmin(pg_current_snapshot())
+                  AND (xid > %s::xid8 OR (xid = %s::xid8 AND id > %s))
+                ORDER BY xid ASC, id ASC
+                LIMIT 1
+            """, (last_xid, last_xid, last_id))
+            next_pending = main_cur.fetchone()
+            if next_pending:
+                has_pending = True
+                oldest_ts = next_pending[0]
+                dt = (now_ts - oldest_ts.replace(tzinfo=datetime.timezone.utc)).total_seconds() if oldest_ts.tzinfo else (datetime.datetime.now() - oldest_ts).total_seconds()
+                lag_sec = max(0.0, round(dt, 2))
+            else:
+                has_pending = False
+                oldest_ts = None
+                lag_sec = 0.0
 
             # 4. Atomic apply in Rollup DB transaction
             try:
@@ -200,9 +211,11 @@ def run_worker(main_url: str, rollup_url: str, batch_size: int = 5000, poll_inte
                         lag_seconds = %s,
                         heartbeat = clock_timestamp(),
                         worker_stalled = false,
-                        stalled_reason = NULL
+                        stalled_reason = NULL,
+                        has_pending = %s,
+                        oldest_pending_ts = %s
                     WHERE id = 1
-                """, (last_xid, last_id, lag_sec))
+                """, (last_xid, last_id, lag_sec, has_pending, oldest_ts))
 
                 rollup_conn.commit()
 

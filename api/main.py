@@ -12,13 +12,12 @@ from fastapi import FastAPI, Header, HTTPException, Query, Path
 from pydantic import BaseModel
 import asyncpg
 
-# Load config
-with open("config.yaml", "r", encoding="utf-8") as f:
-    config = yaml.safe_load(f)
+from config import get_config
 
-ROLLUP_DB_URL = os.getenv("ROLLUP_DB_URL", config["database"].get("rollup_db_url", "postgresql://postgres:postgres@localhost:5433/rollup_1m"))
-KEY_PREFIX = config.get("auth", {}).get("key_prefix", "tenant-key-")
-ADMIN_KEY = config.get("auth", {}).get("admin_key", "admin-secret-key-12345")
+cfg = get_config()
+ROLLUP_DB_URL = cfg["database"]["rollup_db_url"]
+KEY_PREFIX = cfg.get("auth", {}).get("key_prefix", "tenant-key-")
+ADMIN_KEY = cfg.get("auth", {}).get("admin_key", "admin-secret-key-12345")
 
 pool: Optional[asyncpg.Pool] = None
 
@@ -67,12 +66,36 @@ async def get_system_metadata():
     assert pool is not None
     async with pool.acquire() as conn:
         row = await conn.fetchrow("""
-            SELECT lag_seconds, worker_stalled, heartbeat 
+            SELECT lag_seconds, worker_stalled, heartbeat, last_batch_at, has_pending, oldest_pending_ts
             FROM worker_state WHERE id = 1
         """)
-        as_of = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now = datetime.datetime.now(datetime.timezone.utc)
+        as_of = now.isoformat()
         if row:
-            return float(row["lag_seconds"]), bool(row["worker_stalled"]), as_of
+            lag = float(row["lag_seconds"])
+            stalled = bool(row["worker_stalled"])
+            heartbeat = row["heartbeat"]
+            last_batch = row["last_batch_at"]
+            has_pending = bool(row["has_pending"])
+            oldest_pending = row["oldest_pending_ts"]
+
+            hb_utc = heartbeat.replace(tzinfo=datetime.timezone.utc) if heartbeat and heartbeat.tzinfo is None else heartbeat
+            hb_age = (now - hb_utc).total_seconds() if hb_utc else 999.0
+
+            # If worker hasn't updated in > 2.0s (e.g. stopped)
+            if hb_age > 2.0:
+                if oldest_pending:
+                    op_utc = oldest_pending.replace(tzinfo=datetime.timezone.utc) if oldest_pending.tzinfo is None else oldest_pending
+                    lag = max(lag, round((now - op_utc).total_seconds(), 2))
+                elif last_batch:
+                    lb_utc = last_batch.replace(tzinfo=datetime.timezone.utc) if last_batch.tzinfo is None else last_batch
+                    lag = max(lag, round((now - lb_utc).total_seconds(), 2))
+                else:
+                    lag = round(hb_age, 2)
+            elif not has_pending:
+                lag = 0.0
+
+            return lag, stalled, as_of
         return 0.0, False, as_of
 
 # -----------------------------------------------------------------------------

@@ -34,7 +34,9 @@ CREATE TABLE IF NOT EXISTS worker_state (
     lag_seconds numeric(10,2) NOT NULL DEFAULT 0.0,
     heartbeat timestamp NOT NULL DEFAULT clock_timestamp(),
     worker_stalled boolean NOT NULL DEFAULT false,
-    stalled_reason text
+    stalled_reason text,
+    has_pending boolean NOT NULL DEFAULT false,
+    oldest_pending_ts timestamp
 );
 
 -- Initialize default single-row state

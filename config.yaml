@@ -1,10 +1,24 @@
+profile: "1m"
+
+profiles:
+  "1m":
+    main_db_url: "postgresql://postgres:postgres@localhost:5432/shop"
+    rollup_db_url: "postgresql://postgres:postgres@localhost:5433/rollup_1m"
+    main_db_name: "shop"
+    rollup_db_name: "rollup_1m"
+  "10m":
+    main_db_url: "postgresql://postgres:postgres@localhost:5432/shop_10m"
+    rollup_db_url: "postgresql://postgres:postgres@localhost:5433/rollup_10m"
+    main_db_name: "shop_10m"
+    rollup_db_name: "rollup_10m"
+
 database:
+  main_db_url: "postgresql://postgres:postgres@localhost:5432/shop"
+  rollup_db_url: "postgresql://postgres:postgres@localhost:5433/rollup_1m"
   main_1m: "postgresql://postgres:postgres@localhost:5432/shop"
   main_10m: "postgresql://postgres:postgres@localhost:5432/shop_10m"
   rollup_1m: "postgresql://postgres:postgres@localhost:5433/rollup_1m"
   rollup_10m: "postgresql://postgres:postgres@localhost:5433/rollup_10m"
-  main_db_url: "postgresql://postgres:postgres@localhost:5432/shop"
-  rollup_db_url: "postgresql://postgres:postgres@localhost:5433/rollup_1m"
 
 schema:
   tables:

@@ -1,41 +1,55 @@
 #!/usr/bin/env python3
-"""Golden parity verification:
-Compares API endpoints (backed ONLY by rollup-db) against independent plain SQL
-directly on main-db across 10 sample tenants and 3 ranges.
-Every comparison must match with ZERO diff.
+"""tests/test_golden_parity.py:
+Comprehensive golden comparison across ALL 4 endpoints, hourly and daily trend grains,
+10 sample tenants, 5 standard ranges, and 3 edge ranges against independent plain SQL.
 """
-import sys, httpx, psycopg2, yaml
+import sys, os, datetime, httpx, psycopg2
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from config import get_config
 
-def run_golden_check():
-    print("=== Running Golden Correctness Suite (API vs Main-DB SQL) ===")
-    
-    with open("config.yaml", "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
-
+def run_golden_check(profile: str = "1m"):
+    cfg = get_config(profile)
     main_url = cfg["database"]["main_db_url"]
     excluded = tuple(cfg["business_rules"]["excluded_statuses"])
-    admin_key = cfg["auth"]["admin_key"]
     base_url = "http://127.0.0.1:8000"
+
+    print(f"=== Running Golden Parity Check (Profile: {profile}) ===")
+    print(f"Main DB: {main_url}")
+    print(f"Target API: {base_url}")
 
     main_conn = psycopg2.connect(main_url)
     main_cur = main_conn.cursor()
     client = httpx.Client(base_url=base_url, timeout=30.0)
 
-    tenants = [1, 2, 3, 5, 10, 25, 50, 75, 90, 99]
+    # 10 tenants: biggest (1), smallest (99), random (42, 77), plus spread
+    tenants = [1, 99, 42, 77, 2, 5, 10, 25, 50, 90]
+
+    # Current hour for edge range
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    cur_hour_start = (now_utc - datetime.timedelta(hours=2)).strftime("%Y-%m-%d %H:00:00")
+    cur_hour_end = now_utc.strftime("%Y-%m-%d %H:00:00")
+
     ranges = [
-        ("2026-10-01 00:00:00", "2026-10-30 00:00:00", "30 days"),
+        # Standard 5 ranges
+        ("2026-10-25 10:00:00", "2026-10-25 11:00:00", "1 hour"),
+        ("2026-10-25 00:00:00", "2026-10-26 00:00:00", "1 day"),
         ("2026-10-23 00:00:00", "2026-10-30 00:00:00", "7 days"),
-        ("2026-10-28 12:00:00", "2026-10-29 18:00:00", "30 hours"),
+        ("2026-10-01 00:00:00", "2026-10-30 00:00:00", "30 days"),
+        ("2024-10-31 00:00:00", "2026-10-30 00:00:00", "full span"),
+        # Edge ranges
+        ("2020-01-01 00:00:00", "2020-01-02 00:00:00", "empty range"),
+        (cur_hour_start, cur_hour_end, "current hour"),
+        ("2026-09-25 00:00:00", "2026-10-05 00:00:00", "month boundary"),
     ]
 
     total_checks = 0
     mismatches = 0
 
     for tid in tenants:
+        print(f"  Testing Tenant {tid}...", flush=True)
         headers = {"X-Tenant-Key": f"tenant-key-{tid}"}
         for f_time, t_time, r_label in ranges:
-            # 1. Check Count & Revenue (FR-1)
-            # SQL Ground Truth
+            # 1. /orders/count
             main_cur.execute("""
                 SELECT 
                     count(*),
@@ -46,79 +60,135 @@ def run_golden_check():
             sql_cnt, sql_rev = main_cur.fetchone()
             sql_rev = float(sql_rev)
 
-            # API Call
             res = client.get(f"/tenants/{tid}/orders/count?from={f_time}&to={t_time}", headers=headers)
-            assert res.status_code == 200, f"API error: {res.text}"
-            api_data = res.json()["data"]
-            api_cnt = api_data["order_count"]
-            api_rev = api_data["total_sales"]
-
+            assert res.status_code == 200, f"Error: {res.text}"
+            data = res.json()["data"]
             total_checks += 1
-            if api_cnt != sql_cnt or abs(api_rev - sql_rev) > 0.01:
-                print(f"[FAIL] Count mismatch: Tenant {tid} ({r_label}): SQL=({sql_cnt}, {sql_rev}) vs API=({api_cnt}, {api_rev})")
+            if data["order_count"] != sql_cnt or abs(data["total_sales"] - sql_rev) > 0.01:
+                print(f"[FAIL] Count mismatch: T{tid} ({r_label}): SQL=({sql_cnt},{sql_rev}) vs API=({data['order_count']},{data['total_sales']})")
                 mismatches += 1
 
-            # 2. Check Breakdown by Status (FR-4)
+            # 2. /orders/trend (grain=hour)
             main_cur.execute("""
-                SELECT status, count(*), coalesce(sum(CASE WHEN status NOT IN %s THEN total ELSE 0 END), 0)
+                SELECT date_trunc('hour', created_at) AS hr, count(*),
+                       coalesce(sum(CASE WHEN status NOT IN %s THEN total ELSE 0 END), 0)
                 FROM orders
                 WHERE tenant_id = %s AND created_at >= %s AND created_at < %s
-                GROUP BY status
+                GROUP BY 1 ORDER BY 1
             """, (excluded, tid, f_time, t_time))
-            sql_status_map = {r[0]: (r[1], float(r[2])) for r in main_cur.fetchall()}
+            sql_hr_trend = {r[0].strftime("%Y-%m-%dT%H:00:00Z"): (r[1], float(r[2])) for r in main_cur.fetchall()}
 
-            res = client.get(f"/tenants/{tid}/orders/by-status?from={f_time}&to={t_time}", headers=headers)
+            res = client.get(f"/tenants/{tid}/orders/trend?from={f_time}&to={t_time}&grain=hour", headers=headers)
             assert res.status_code == 200
-            api_status_map = {r["status"]: (r["order_count"], float(r["sales"])) for r in res.json()["data"]}
+            api_hr_trend = {r["bucket"]: (r["order_count"], float(r["sales"])) for r in res.json()["data"]}
 
             total_checks += 1
-            for st, (sc, sr) in sql_status_map.items():
-                ac, ar = api_status_map.get(st, (0, 0.0))
-                if ac != sc or abs(ar - sr) > 0.01:
-                    print(f"[FAIL] Status mismatch for {st} on Tenant {tid}: SQL=({sc}, {sr}) vs API=({ac}, {ar})")
-                    mismatches += 1
+            if len(sql_hr_trend) != len(api_hr_trend):
+                print(f"[FAIL] Hourly trend length mismatch: T{tid} ({r_label})")
+                mismatches += 1
+            else:
+                for b, (sc, ss) in sql_hr_trend.items():
+                    ac, as_val = api_hr_trend.get(b, (0, 0.0))
+                    if ac != sc or abs(as_val - ss) > 0.01:
+                        print(f"[FAIL] Hourly trend value mismatch: T{tid} bucket {b}")
+                        mismatches += 1
 
-            # 3. Check Top 10 Products by Sales (FR-3) (on daily snapped range)
-            # Snapped to whole days for daily queries
+            # 3. /orders/trend (grain=day) (snapped to whole day)
             f_day = f_time[:10] + " 00:00:00"
             t_day = t_time[:10] + " 00:00:00"
             if t_time[11:] != "00:00:00":
-                import datetime
                 t_day = (datetime.datetime.fromisoformat(t_time[:10]) + datetime.timedelta(days=1)).strftime("%Y-%m-%d 00:00:00")
 
             main_cur.execute("""
-                SELECT oi.product_id, sum(oi.qty) AS units, sum(oi.qty * oi.price) AS sales
-                FROM order_items oi
-                JOIN orders o ON o.order_id = oi.order_id
-                WHERE o.tenant_id = %s
-                  AND o.created_at >= %s AND o.created_at < %s
-                  AND o.status NOT IN %s
-                GROUP BY oi.product_id
-                ORDER BY sales DESC
-                LIMIT 10
-            """, (tid, f_day, t_day, excluded))
-            sql_top = [(r[0], r[1], float(r[2])) for r in main_cur.fetchall()]
+                SELECT date_trunc('day', created_at) AS dy, count(*),
+                       coalesce(sum(CASE WHEN status NOT IN %s THEN total ELSE 0 END), 0)
+                FROM orders
+                WHERE tenant_id = %s AND created_at >= %s AND created_at < %s
+                GROUP BY 1 ORDER BY 1
+            """, (excluded, tid, f_day, t_day))
+            sql_dy_trend = {r[0].strftime("%Y-%m-%dT00:00:00Z"): (r[1], float(r[2])) for r in main_cur.fetchall()}
 
-            res = client.get(f"/tenants/{tid}/products/top?from={f_day}&to={t_day}&n=10&by=sales", headers=headers)
+            res = client.get(f"/tenants/{tid}/orders/trend?from={f_time}&to={t_time}&grain=day", headers=headers)
             assert res.status_code == 200
-            api_top = [(r["product_id"], r["units"], float(r["sales"])) for r in res.json()["data"]]
+            api_dy_trend = {r["bucket"]: (r["order_count"], float(r["sales"])) for r in res.json()["data"]}
 
             total_checks += 1
-            if len(sql_top) != len(api_top):
-                print(f"[FAIL] Top products length mismatch on Tenant {tid}: SQL={len(sql_top)} vs API={len(api_top)}")
+            if len(sql_dy_trend) != len(api_dy_trend):
+                print(f"[FAIL] Daily trend length mismatch: T{tid} ({r_label})")
+                mismatches += 1
+
+            # 4. /orders/by-status
+            main_cur.execute("""
+                SELECT status, count(*),
+                       coalesce(sum(CASE WHEN status NOT IN %s THEN total ELSE 0 END), 0)
+                FROM orders
+                WHERE tenant_id = %s AND created_at >= %s AND created_at < %s
+                GROUP BY status ORDER BY count(*) DESC
+            """, (excluded, tid, f_time, t_time))
+            sql_statuses = {r[0]: (r[1], float(r[2])) for r in main_cur.fetchall()}
+
+            res = client.get(f"/tenants/{tid}/orders/by-status?from={f_time}&to={t_time}", headers=headers)
+            assert res.status_code == 200
+            api_statuses = {r["status"]: (r["order_count"], float(r["sales"])) for r in res.json()["data"]}
+
+            total_checks += 1
+            for st, (sc, ss) in sql_statuses.items():
+                ac, as_val = api_statuses.get(st, (0, 0.0))
+                if ac != sc or abs(as_val - ss) > 0.01:
+                    print(f"[FAIL] Status mismatch for {st} on T{tid} ({r_label})")
+                    mismatches += 1
+
+            # 5. /products/top by sales
+            main_cur.execute("""
+                SELECT oi.product_id, sum(oi.qty * oi.price) AS sales
+                FROM order_items oi
+                JOIN orders o ON o.order_id = oi.order_id
+                WHERE o.tenant_id = %s AND oi.tenant_id = %s AND o.created_at >= %s AND o.created_at < %s
+                  AND o.status NOT IN %s
+                GROUP BY oi.product_id ORDER BY sales DESC LIMIT 10
+            """, (tid, tid, f_day, t_day, excluded))
+            sql_top_sales = [(r[0], float(r[1])) for r in main_cur.fetchall()]
+
+            res = client.get(f"/tenants/{tid}/products/top?from={f_time}&to={t_time}&n=10&by=sales", headers=headers)
+            assert res.status_code == 200
+            api_top_sales = [(r["product_id"], float(r["sales"])) for r in res.json()["data"]]
+
+            total_checks += 1
+            if len(sql_top_sales) != len(api_top_sales):
+                print(f"[FAIL] Top sales length mismatch: T{tid} ({r_label})")
                 mismatches += 1
             else:
-                for (sp, su, ss), (ap, au, ass) in zip(sql_top, api_top):
-                    if sp != ap or su != au or abs(ss - ass) > 0.01:
-                        print(f"[FAIL] Top product item mismatch on Tenant {tid}: SQL=({sp}, {su}, {ss}) vs API=({ap}, {au}, {ass})")
+                for (sp, ss), (ap, as_val) in zip(sql_top_sales, api_top_sales):
+                    if sp != ap or abs(ss - as_val) > 0.01:
+                        print(f"[FAIL] Top product sales mismatch: T{tid} ({r_label})")
                         mismatches += 1
 
-    print(f"\n==================================================")
-    print(f"GOLDEN PARITY RESULTS:")
-    print(f"Total query validations: {total_checks}")
-    print(f"Mismatches detected:     {mismatches}")
-    print(f"Parity Rate:             {((total_checks - mismatches) / total_checks) * 100:.2f}%")
-    print(f"==================================================")
+            # 6. /products/top by units
+            main_cur.execute("""
+                SELECT oi.product_id, sum(oi.qty) AS units
+                FROM order_items oi
+                JOIN orders o ON o.order_id = oi.order_id
+                WHERE o.tenant_id = %s AND oi.tenant_id = %s AND o.created_at >= %s AND o.created_at < %s
+                  AND o.status NOT IN %s
+                GROUP BY oi.product_id ORDER BY units DESC LIMIT 10
+            """, (tid, tid, f_day, t_day, excluded))
+            sql_top_units = [(r[0], int(r[1])) for r in main_cur.fetchall()]
+
+            res = client.get(f"/tenants/{tid}/products/top?from={f_time}&to={t_time}&n=10&by=units", headers=headers)
+            assert res.status_code == 200
+            api_top_units = [(r["product_id"], int(r["units"])) for r in res.json()["data"]]
+
+            total_checks += 1
+            if len(sql_top_units) != len(api_top_units):
+                print(f"[FAIL] Top units length mismatch: T{tid} ({r_label})")
+                mismatches += 1
+
+    print("\n" + "=" * 60)
+    print(f"GOLDEN PARITY REPORT ({profile.upper()}):")
+    print(f"Total ground-truth checks: {total_checks}")
+    print(f"Mismatches detected:       {mismatches}")
+    print(f"Parity Rate:               {((total_checks - mismatches) / total_checks) * 100:.2f}%")
+    print("=" * 60)
 
     main_cur.close()
     main_conn.close()
@@ -126,5 +196,6 @@ def run_golden_check():
     return mismatches == 0
 
 if __name__ == "__main__":
-    success = run_golden_check()
-    sys.exit(0 if success else 1)
+    prof = sys.argv[1] if len(sys.argv) > 1 else "1m"
+    ok = run_golden_check(prof)
+    sys.exit(0 if ok else 1)

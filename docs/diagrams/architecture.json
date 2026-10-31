@@ -1,0 +1,235 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Multi-Tenant Aggregation Layer Architecture",
+    "output": "docs/diagrams/architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "query-path",
+        "label": "Dashboard Query Path",
+        "focus": ["dashboards", "api", "rollupdb"],
+        "note": "Tenant dashboard queries are served directly from pre-computed rollups in Rollup DB, keeping the main OLTP database healthy."
+      },
+      {
+        "id": "ingestion-path",
+        "label": "CDC Ingestion & Worker Path",
+        "focus": ["mainapp", "maindb", "outbox", "worker", "rollupdb"],
+        "note": "Statement-level AFTER triggers emit signed change rows (+1/-1); worker folds batches and upserts to Rollup DB."
+      },
+      {
+        "id": "rebuild-admin",
+        "label": "Admin Rebuild Path",
+        "focus": ["api", "worker", "rollupdb", "quarantine"],
+        "note": "Admin endpoint triggers worker rebuild into shadow rollups with atomic swap and quarantine monitoring."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "dashboards",
+      "type": "frontend",
+      "label": "Tenant Dashboards",
+      "sublabel": "Browser / Store UI",
+      "pos": [60, 180],
+      "size": [160, 64]
+    },
+    {
+      "id": "harness",
+      "type": "external",
+      "label": "Bench Harness",
+      "sublabel": "Speed / Safety Tests",
+      "pos": [60, 320],
+      "size": [160, 64]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "FastAPI Aggregation",
+      "sublabel": "Auth & Concurrency :8000",
+      "brand": "fastapi",
+      "pos": [320, 250],
+      "size": [170, 74],
+      "tag": "REST API"
+    },
+    {
+      "id": "rollupdb",
+      "type": "database",
+      "label": "Rollup DB (PostgreSQL)",
+      "sublabel": "Hourly & Daily Rollups",
+      "brand": "postgresql",
+      "pos": [630, 170],
+      "size": [180, 70],
+      "tag": "Port :5433"
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "CDC Worker",
+      "sublabel": "Batch fold & safe cursor",
+      "brand": "docker",
+      "pos": [630, 310],
+      "size": [180, 70]
+    },
+    {
+      "id": "quarantine",
+      "type": "security",
+      "label": "Quarantine Store",
+      "sublabel": "Rejected row tracking",
+      "pos": [630, 440],
+      "size": [180, 60]
+    },
+    {
+      "id": "outbox",
+      "type": "messagebus",
+      "label": "Outbox Table",
+      "sublabel": "Signed diffs (+1/-1) & xid8",
+      "pos": [950, 380],
+      "size": [170, 70]
+    },
+    {
+      "id": "maindb",
+      "type": "database",
+      "label": "Main DB (PostgreSQL)",
+      "sublabel": "10M orders (untouched)",
+      "brand": "postgresql",
+      "pos": [950, 240],
+      "size": [170, 74],
+      "tag": "Port :5432"
+    },
+    {
+      "id": "mainapp",
+      "type": "external",
+      "label": "App / Simulator",
+      "sublabel": "E-commerce writes",
+      "pos": [950, 110],
+      "size": [170, 64]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Aggregation & Analytics Tier",
+      "wraps": ["api", "rollupdb", "worker", "quarantine"]
+    },
+    {
+      "kind": "region",
+      "label": "Main OLTP Host",
+      "wraps": ["maindb", "outbox"]
+    }
+  ],
+  "connections": [
+    {
+      "id": "conn-dash-api",
+      "from": "dashboards",
+      "to": "api",
+      "label": "X-Tenant-Key",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "conn-harness-api",
+      "from": "harness",
+      "to": "api",
+      "label": "benchmark query",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "conn-api-rollup",
+      "from": "api",
+      "to": "rollupdb",
+      "label": "rollup query (<100ms)",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "conn-api-worker",
+      "from": "api",
+      "to": "worker",
+      "label": "/admin rebuild (B-2)",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "conn-app-maindb",
+      "from": "mainapp",
+      "to": "maindb",
+      "label": "OLTP writes",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [1035, 195]
+    },
+    {
+      "id": "conn-maindb-outbox",
+      "from": "maindb",
+      "to": "outbox",
+      "label": "AFTER triggers",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [1035, 345]
+    },
+    {
+      "id": "conn-outbox-worker",
+      "from": "outbox",
+      "to": "worker",
+      "label": "safe-xid batch",
+      "variant": "emphasis",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "conn-worker-rollup",
+      "from": "worker",
+      "to": "rollupdb",
+      "label": "folded upsert",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "conn-worker-quarantine",
+      "from": "worker",
+      "to": "quarantine",
+      "label": "invalid rows",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [720, 405]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Decoupled Dashboards",
+      "items": [
+        "FastAPI serves queries solely from pre-aggregated rollups in Rollup DB",
+        "Zero dashboard query load touches the primary OLTP database",
+        "Target p95 latency under 100ms across 10M orders and 100 tenants"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "CDC Pipeline",
+      "items": [
+        "Statement-level AFTER triggers write signed diff rows (+1 / -1) with xid8",
+        "Worker uses pg_snapshot_xmin safe watermark to prevent missed commits",
+        "In-memory aggregation folds multi-item batches into a single upsert per key"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Safety & Integrity",
+      "items": [
+        "Strict tenant isolation with mandatory X-Tenant-Key authentication",
+        "CHECK (count >= 0) enforces fail-closed behavior on calculation errors",
+        "Corrupted records routed directly to quarantine with failure reason"
+      ]
+    }
+  ]
+}
