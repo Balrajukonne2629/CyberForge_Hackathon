@@ -11,7 +11,8 @@ from config import get_config, get_tenant_db_url
 def run_golden_check(profile: str = "1m") -> bool:
     cfg = get_config(profile)
     excluded = tuple(cfg["business_rules"]["excluded_statuses"])
-    base_url = "http://127.0.0.1:8000"
+    api_port = os.getenv("API_PORT", "8000")
+    base_url = f"http://127.0.0.1:{api_port}"
 
     print("=" * 70)
     print(f"RUNNING GOLDEN PARITY CHECK (PROFILE: {profile.upper()})")

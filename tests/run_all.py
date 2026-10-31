@@ -30,11 +30,12 @@ def reset_all_worker_state(rollup_url: str):
     cur.close()
     conn.close()
 
-def wait_for_api_ready(api_url: str = "http://127.0.0.1:8000", max_wait: float = 15.0):
+def wait_for_api_ready(api_url: Optional[str] = None, max_wait: float = 15.0):
+    url = api_url or f"http://127.0.0.1:{os.getenv('API_PORT', '8000')}"
     t0 = time.time()
     while time.time() - t0 < max_wait:
         try:
-            r = httpx.get(f"{api_url}/health", timeout=2.0)
+            r = httpx.get(f"{url}/health", timeout=2.0)
             if r.status_code == 200:
                 print("  FastAPI server is ready!")
                 return True

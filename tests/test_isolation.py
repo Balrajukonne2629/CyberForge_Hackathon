@@ -14,7 +14,8 @@ def run_isolation_tests(profile: str = "1m"):
     print(f"=== Running Tenant Isolation Tests ({profile.upper()}) ===")
     cfg = get_config(profile)
     rollup_url = cfg["database"]["rollup_db_url"]
-    api_url = "http://127.0.0.1:8000"
+    api_port = os.getenv("API_PORT", "8000")
+    api_url = f"http://127.0.0.1:{api_port}"
     client = httpx.Client(base_url=api_url)
 
     # 1. Missing header -> 403

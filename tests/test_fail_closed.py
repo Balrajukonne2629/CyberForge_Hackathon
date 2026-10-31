@@ -16,7 +16,8 @@ def run_fail_closed_test(profile: str = "1m") -> bool:
     print(f"=== Running Per-Tenant Fail-Closed Constraint Test ({profile.upper()}) ===")
     cfg = get_config(profile)
     rollup_url = cfg["database"]["rollup_db_url"]
-    api_url = "http://127.0.0.1:8000"
+    api_port = os.getenv("API_PORT", "8000")
+    api_url = f"http://127.0.0.1:{api_port}"
     client = httpx.Client(base_url=api_url, timeout=10.0)
 
     stall_tenant = 5
