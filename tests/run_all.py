@@ -5,6 +5,7 @@ Runs all 11 test suites for a given profile (1m or 10m).
 Exits non-zero on any failure.
 """
 import sys, os, time, argparse, subprocess, httpx, psycopg2
+from typing import Optional
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from tests.test_isolation import run_isolation_tests
