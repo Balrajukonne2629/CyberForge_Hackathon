@@ -72,15 +72,38 @@ LIMIT 5;
    ```
 4. The worker automatically resumes ingestion for that tenant on its next cycle.
 
-### Procedure B: Targeted Rebuild for That Tenant
-If rollups for a single tenant diverged:
-1. Trigger targeted rebuild via API:
+### Procedure B: Targeted Single-Tenant Rebuild (Recommended)
+If rollups for a single tenant diverged or stalled due to outbox inconsistencies, execute a surgical single-tenant rebuild:
+
+1. **Check Stall via Operational Telemetry**:
+   ```bash
+   curl -s -H "X-Admin-Key: admin-secret-key-12345" http://localhost:8000/admin/monitor | jq '.tenants[] | select(.stalled == true)'
+   ```
+2. **Trigger Targeted Rebuild via Admin API**:
    ```bash
    curl -X POST "http://localhost:8000/admin/rebuild?tenant_id=<tenant_id>" \
         -H "X-Admin-Key: admin-secret-key-12345"
    ```
-2. Or run CLI rebuild for that specific tenant:
+   *Expected Response*:
+   ```json
+   {
+     "status": "success",
+     "scope": "tenant_<tenant_id>",
+     "result": { "tenant_id": <tenant_id>, "status": "completed" }
+   }
+   ```
+3. **Alternative CLI Rebuild**:
    ```powershell
    py -3.12 scripts/rebuild.py --profile 1m --tenant-id <tenant_id>
    ```
-3. The procedure captures a `REPEATABLE READ` snapshot on that tenant's database, re-aggregates rollups for that tenant only, resets `worker_state.stalled = false`, and records the snapshot so the worker skips already-incorporated rows.
+4. **How the Targeted Rebuild Works**:
+   - Captures a `REPEATABLE READ` snapshot on the tenant's individual database.
+   - Atomically deletes existing rollup records in `rollup_orders_hour` and `rollup_product_day` *only* for `tenant_id = <tenant_id>`.
+   - Re-aggregates raw `orders` and `order_items` tables into clean rollups.
+   - Updates `worker_state` for that tenant: sets `stalled = false`, clears `last_error`, advances `cursor_xid` to the snapshot upper bound, and resets `lag_seconds = 0.0`.
+   - Executes `VACUUM (ANALYZE)` on the affected tables.
+5. **Verify Recovery**:
+   ```bash
+   curl -s -H "X-Admin-Key: admin-secret-key-12345" http://localhost:8000/admin/monitor | jq '.tenants[] | select(.tenant_id == <tenant_id>)'
+   ```
+   Ensure `"stalled": false` and `"lag_seconds": 0.0`.

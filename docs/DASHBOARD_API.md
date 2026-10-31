@@ -1,6 +1,6 @@
 # Dashboard API Specification
 
-Complete reference for all API endpoints, authentication headers, request parameters, and response shapes used by the Multi-Tenant Aggregation Layer Demo Dashboard.
+Complete reference for all API endpoints, authentication headers, request parameters, response shapes, and telemetry schemas used by the Multi-Tenant Aggregation Layer Demo Dashboard.
 
 ---
 
@@ -11,10 +11,15 @@ Complete reference for all API endpoints, authentication headers, request parame
   - Matches the key registered in `tenant_registry` (`api_key` column, e.g. `tenant-key-1` for tenant 1).
   - The master `ADMIN_KEY` is also accepted as a bypass on tenant endpoints.
   - Mismatched or missing key returns `403 Forbidden`.
+  - Keys cannot be used across different tenants (e.g. `tenant-key-2` on tenant 1 returns `403 Forbidden`).
 - **Admin Authentication (`X-Admin-Key`)**:
   - Required on all `/admin/*` and `/demo/*` endpoints.
   - Configured via `config.yaml` (`auth.admin_key`, default `admin-secret-key-12345`).
   - Mismatched or missing key returns `403 Forbidden`.
+- **Concurrency Rate Limiting (B-3)**:
+  - All tenant dashboard endpoints enforce a per-tenant concurrency semaphore (default `8` concurrent requests per tenant).
+  - Requests exceeding the active concurrency limit receive `429 Too Many Requests` with header `Retry-After: 1`.
+  - Admin (`/admin/*`), health (`/health`), and push stream (`/stream`) endpoints are exempt from tenant throttles.
 - **Demo Mode Guard (`DEMO_MODE`)**:
   - All `/demo/*` endpoints require the environment variable `DEMO_MODE=1`.
   - When `DEMO_MODE != "1"`, all `/demo/*` endpoints return `404 Not Found`.
@@ -106,7 +111,7 @@ Returns top $N$ products ordered by sales or units sold within the snapped day w
 ```
 
 ### 2.4 GET `/tenants/{tenant_id}/orders/by-status`
-Returns breakdown of orders and revenue grouped by status.
+Returns counts and sales grouped by status across the snapped hour window.
 
 - **Headers**: `X-Tenant-Key: <key>`
 - **Query Parameters**:
@@ -115,18 +120,15 @@ Returns breakdown of orders and revenue grouped by status.
 - **Response** (`200 OK`):
 ```json
 {
-  "data": [
-    {
-      "status": "delivered",
-      "order_count": 8900,
-      "sales": 1340000.00
+  "data": {
+    "by_status": {
+      "delivered": {"order_count": 8900, "sales": 1340000.00},
+      "shipped": {"order_count": 800, "sales": 115000.00},
+      "placed": {"order_count": 300, "sales": 40200.50}
     },
-    {
-      "status": "canceled",
-      "order_count": 500,
-      "sales": 0.00
-    }
-  ],
+    "total_orders": 10000,
+    "total_sales": 1495200.50
+  },
   "range": {
     "from": "2026-10-01T00:00:00Z",
     "to": "2026-10-30T00:00:00Z"
@@ -253,6 +255,85 @@ Triggers rebuild of rollups from raw tables.
 
 - **Headers**: `X-Admin-Key: <key>`
 - **Query Parameters**: `tenant_id` (optional, omits to rebuild all)
+- **Response** (`200 OK`):
+```json
+{
+  "status": "success",
+  "scope": "tenant_1",
+  "result": { "tenant_id": 1, "status": "completed" }
+}
+```
+
+### 3.6 GET `/admin/monitor` (B-5 Operational Telemetry)
+Comprehensive platform monitoring telemetry for operational dashboards.
+
+- **Headers**: `X-Admin-Key: <key>` (Required, returns `403 Forbidden` if missing or invalid)
+- **Response** (`200 OK`):
+```json
+{
+  "tenants": [
+    {
+      "tenant_id": 1,
+      "lag_seconds": 0.0,
+      "stalled": false,
+      "cursor_xid": "531136",
+      "cursor_id": 40116,
+      "quarantine_count": 0
+    }
+  ],
+  "endpoints": {
+    "/orders/count": {
+      "p50_ms": 1.45,
+      "p95_ms": 65.75,
+      "calls_60s": 134
+    },
+    "/orders/trend": {
+      "p50_ms": 2.10,
+      "p95_ms": 5.40,
+      "calls_60s": 24
+    },
+    "/orders/by-status": {
+      "p50_ms": 1.80,
+      "p95_ms": 4.90,
+      "calls_60s": 18
+    },
+    "/products/top": {
+      "p50_ms": 3.20,
+      "p95_ms": 8.70,
+      "calls_60s": 30
+    }
+  },
+  "worker": {
+    "mode": "event",
+    "uptime_seconds": 20483.7,
+    "safety_sweep_age_seconds": 4.12,
+    "loop_time_ms": 467.1
+  },
+  "requests": {
+    "total_requests": 134,
+    "count_429": 42
+  }
+}
+```
+**Field Definitions**:
+- `tenants`: Per-tenant array of all 100 tenant states:
+  - `tenant_id`: Unique identifier (1..100)
+  - `lag_seconds`: Seconds since oldest pending outbox row enqueue time (0.0 if clean)
+  - `stalled`: Boolean indicating whether pipeline is paused due to consecutive errors
+  - `cursor_xid` / `cursor_id`: Source-of-truth progress cursor in outbox
+  - `quarantine_count`: Count of malformed/poison pill events isolated in quarantine table
+- `endpoints`: Query latencies computed from an in-memory 60-second sliding ring buffer:
+  - `p50_ms`: 50th percentile execution time in milliseconds
+  - `p95_ms`: 95th percentile execution time in milliseconds
+  - `calls_60s`: Number of requests processed in the last 60 seconds
+- `worker`: Operational worker telemetry:
+  - `mode`: `"event"` or `"poll"`
+  - `uptime_seconds`: Continuous runtime of the background aggregation worker
+  - `safety_sweep_age_seconds`: Elapsed time since the last periodic safety sweep
+  - `loop_time_ms`: Execution duration of the last polling or event notification loop
+- `requests`: Global request volume counters:
+  - `total_requests`: Total requests handled since API start
+  - `count_429`: Requests throttled due to per-tenant concurrency semaphore limit
 
 ---
 

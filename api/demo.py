@@ -34,6 +34,21 @@ class DemoFloodRequest(BaseModel):
     tenant_id: int = 1
     n: int = 10
 
+@router.get("/demo/keys")
+async def demo_keys(
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")
+):
+    _check_demo_access(x_admin_key)
+    profile = os.getenv("PROFILE", "1m")
+    cfg = get_config(profile)
+    admin_key = cfg.get("auth", {}).get("admin_key", "admin-secret-key-12345")
+    tenant_keys = {str(i): f"tenant-key-{i}" for i in range(1, 101)}
+    return {
+        "admin_key": admin_key,
+        "admin_key_hint": admin_key,
+        "tenant_keys": tenant_keys
+    }
+
 @router.post("/demo/order")
 async def demo_order(
     req: DemoOrderRequest,

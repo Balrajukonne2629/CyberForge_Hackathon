@@ -12,12 +12,16 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 import asyncpg
 
-import api.main
 from config import get_config
 from api.demo import router as demo_router
 
 router = APIRouter()
 router.include_router(demo_router)
+
+from api.main import snap_to_hour, snap_to_day
+
+# Lazy pool reference to avoid circular import issues
+_pool = None
 
 def _verify_admin(x_admin_key: Optional[str]):
     profile = os.getenv("PROFILE", "1m")
@@ -27,11 +31,15 @@ def _verify_admin(x_admin_key: Optional[str]):
         raise HTTPException(status_code=403, detail="Forbidden: Admin key required")
 
 async def _get_pool():
-    if api.main.pool is None:
+    global _pool
+    import api.main
+    if api.main.pool is not None:
+        return api.main.pool
+    if _pool is None:
         profile = os.getenv("PROFILE", "1m")
         cfg = get_config(profile)
-        api.main.pool = await asyncpg.create_pool(cfg["database"]["rollup_db_url"], min_size=2, max_size=10)
-    return api.main.pool
+        _pool = await asyncpg.create_pool(cfg["database"]["rollup_db_url"], min_size=2, max_size=10)
+    return _pool
 
 @router.get("/ui")
 async def serve_ui():
@@ -54,8 +62,8 @@ async def platform_summary(
     x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")
 ):
     _verify_admin(x_admin_key)
-    f_dt = api.main.snap_to_hour(from_time, is_end=False)
-    t_dt = api.main.snap_to_hour(to_time, is_end=True)
+    f_dt = snap_to_hour(from_time, is_end=False)
+    t_dt = snap_to_hour(to_time, is_end=True)
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     as_of = now_utc.isoformat()
 
@@ -109,7 +117,24 @@ async def platform_summary(
             ORDER BY order_count DESC
         """, f_dt, t_dt)
 
-        # 5. Quarantine and worker stats
+        # 5. Top 10 products across all tenants
+        f_day = snap_to_day(from_time, is_end=False)
+        t_day = snap_to_day(to_time, is_end=True)
+        top_product_rows = await conn.fetch("""
+            SELECT 
+                product_id,
+                category,
+                SUM(units)::bigint AS units,
+                SUM(sales)::numeric(14,2) AS sales
+            FROM rollup_product_day
+            WHERE day >= $1 AND day < $2
+            GROUP BY product_id, category
+            HAVING SUM(units) > 0
+            ORDER BY sales DESC
+            LIMIT 10
+        """, f_day, t_day)
+
+        # 6. Quarantine and worker stats
         quarantine_cnt = await conn.fetchval("SELECT count(*) FROM quarantine")
         worker_rows = await conn.fetch("SELECT stalled, lag_seconds FROM worker_state")
 
@@ -145,6 +170,15 @@ async def platform_summary(
             }
             for r in status_rows
         ],
+        "top_products": [
+            {
+                "product_id": int(r["product_id"]),
+                "category": r["category"],
+                "units": int(r["units"]),
+                "sales": float(r["sales"])
+            }
+            for r in top_product_rows
+        ],
         "quarantine_count": int(quarantine_cnt or 0),
         "stalled_tenants_count": stalled_count,
         "max_lag_seconds": round(max_lag, 2),
@@ -153,6 +187,81 @@ async def platform_summary(
             "to": t_dt.isoformat() + "Z"
         },
         "as_of": as_of
+    }
+
+@router.get("/admin/platform/tenants")
+async def platform_tenants(
+    from_time: str = Query(..., alias="from"),
+    to_time: str = Query(..., alias="to"),
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")
+):
+    _verify_admin(x_admin_key)
+    f_dt = snap_to_hour(from_time, is_end=False)
+    t_dt = snap_to_hour(to_time, is_end=True)
+
+    pool = await _get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT 
+                r.tenant_id,
+                r.database_name,
+                COALESCE(s.lag_seconds, 0.0) AS lag_seconds,
+                COALESCE(s.stalled, false) AS stalled,
+                COALESCE(o.order_count, 0)::bigint AS order_count,
+                COALESCE(o.total_sales, 0.00)::numeric(14,2) AS total_sales,
+                COALESCE(q.quarantine_count, 0)::bigint AS quarantine_count
+            FROM tenant_registry r
+            LEFT JOIN worker_state s ON r.tenant_id = s.tenant_id
+            LEFT JOIN (
+                SELECT tenant_id, SUM(order_count) AS order_count, SUM(revenue) AS total_sales
+                FROM rollup_orders_hour
+                WHERE hour >= $1 AND hour < $2
+                GROUP BY tenant_id
+            ) o ON r.tenant_id = o.tenant_id
+            LEFT JOIN (
+                SELECT tenant_id, COUNT(*) AS quarantine_count
+                FROM quarantine
+                GROUP BY tenant_id
+            ) q ON r.tenant_id = q.tenant_id
+            ORDER BY r.tenant_id ASC
+        """, f_dt, t_dt)
+
+    return [
+        {
+            "tenant_id": int(r["tenant_id"]),
+            "database_name": r["database_name"],
+            "lag_seconds": float(r["lag_seconds"]),
+            "stalled": bool(r["stalled"]),
+            "order_count": int(r["order_count"]),
+            "sales": float(r["total_sales"]),
+            "quarantine": int(r["quarantine_count"])
+        }
+        for r in rows
+    ]
+
+@router.get("/admin/monitor")
+async def admin_monitor(x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")):
+    _verify_admin(x_admin_key)
+    profile = os.getenv("PROFILE", "1m")
+    cfg = get_config(profile)
+    w_cfg = cfg.get("worker", {})
+    pool = await _get_pool()
+    async with pool.acquire() as conn:
+        worker_rows = await conn.fetch("SELECT stalled, lag_seconds FROM worker_state")
+        quarantine_cnt = await conn.fetchval("SELECT count(*) FROM quarantine")
+
+    stalled_count = sum(1 for r in worker_rows if r["stalled"])
+    max_lag = max([float(r["lag_seconds"] or 0.0) for r in worker_rows], default=0.0)
+
+    return {
+        "worker_mode": w_cfg.get("mode", "event"),
+        "safety_sweep_interval": float(w_cfg.get("safety_sweep_interval", 5.0)),
+        "debounce_ms": int(w_cfg.get("debounce_ms", 15)),
+        "loop_time_ms": round(float(w_cfg.get("debounce_ms", 15)) * 1.5, 2),
+        "stalled_count": stalled_count,
+        "max_lag_seconds": round(max_lag, 2),
+        "quarantine_count": int(quarantine_cnt or 0),
+        "as_of": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
 
 @router.get("/admin/platform/scaling")
