@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Tenant Aggregation Layer - Demo Dashboard</title>
+  <style>
+    :root {
+      --bg: #F6F4EF;
+      --card: #FFFFFF;
+      --line: #DDD8CE;
+      --text: #352208;
+      --muted: #766C7F;
+      --accent: #037971;
+      --accent-contrast: #FFFFFF;
+      --fill-soft: #A7BED3;
+      --ok: #C3D898;
+      --ok-border: #8FA766;
+      --warn: #B7791F;
+      --bad: #B3402E;
+      --stalled: #766C7F;
+      --grid-gap: 8px;
+      --radius: 4px;
+    }
+
+    [data-theme="dark"] {
+      --bg: #1B1710;
+      --card: #241F16;
+      --line: #3A3326;
+      --text: #EFE9DE;
+      --muted: #A79FB0;
+      --accent: #3FB5AB;
+      --fill-soft: #5E7488;
+      --ok: #A9C27A;
+      --ok-border: #7F9E4B;
+      --warn: #D9A441;
+      --bad: #E0705B;
+      --stalled: #766C7F;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 16px;
+    }
+
+    .tabular {
+      font-family: ui-monospace, Consolas, "Liberation Mono", Menlo, monospace;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    /* Container */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .title-group h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .title-group p {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Buttons & Inputs */
+    button, input, select {
+      font-family: inherit;
+      font-size: 13px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 6px 12px;
+      background: var(--card);
+      color: var(--text);
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    button:hover {
+      border-color: var(--text);
+    }
+
+    button.btn-primary {
+      background-color: var(--accent);
+      color: var(--accent-contrast);
+      border-color: var(--accent);
+    }
+
+    button.btn-primary:hover {
+      opacity: 0.95;
+    }
+
+    /* Banner */
+    .stalled-banner {
+      display: none;
+      background-color: var(--bad);
+      color: #FFFFFF;
+      padding: 10px 16px;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      font-weight: 600;
+      border: 1px solid var(--bad);
+    }
+
+    /* Navigation Tabs */
+    nav.tab-nav {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    nav.tab-nav button {
+      border: 1px solid transparent;
+      border-bottom: none;
+      border-radius: var(--radius) var(--radius) 0 0;
+      padding: 8px 16px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    nav.tab-nav button.active {
+      color: var(--accent-contrast);
+      background-color: var(--accent);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* Layout Cards & Grids */
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .card {
+      background-color: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    /* Controls Bar */
+    .controls-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding: 12px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .controls-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Range Buttons */
+    .range-selector button.active {
+      background-color: var(--accent);
+      color: var(--accent-contrast);
+      border-color: var(--accent);
+    }
+
+    /* Tiles Grid */
+    .tiles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .tile {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+
+    .tile-caption {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .tile-value-wrap {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+    }
+
+    .tile-value {
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .tile-unit {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 500;
+      margin-left: 4px;
+    }
+
+    .tile-note {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* Live Feed */
+    .live-feed-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+
+    .live-feed-list {
+      max-height: 80px;
+      overflow-y: auto;
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .live-feed-item {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text);
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 2px;
+    }
+
+    .live-feed-time {
+      color: var(--muted);
+    }
+
+    /* Grid for Charts */
+    .charts-grid-2 {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .charts-grid-equal {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    @media (max-width: 900px) {
+      .charts-grid-2, .charts-grid-equal {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* SVG Chart Containers */
+    .chart-container {
+      width: 100%;
+      height: 240px;
+      position: relative;
+    }
+
+    svg.chart-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Data Age Badge */
+    .data-age-bar {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+    }
+
+    /* Error Message Box */
+    .error-box {
+      display: none;
+      background-color: var(--card);
+      color: var(--bad);
+      border: 1px solid var(--bad);
+      padding: 14px;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      font-weight: 500;
+    }
+
+    /* Heatmap */
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 6px;
+      margin: 16px 0;
+    }
+
+    .heatmap-cell {
+      aspect-ratio: 1;
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+      border: 1px solid transparent;
+      user-select: none;
+    }
+
+    .heatmap-legend {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      margin-top: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+
+    /* Direct Query Panel */
+    .bench-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 600px) {
+      .bench-panel {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .bench-box {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+
+    .bench-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    /* Tables */
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    table.data-table th, table.data-table td {
+      border: 1px solid var(--line);
+      padding: 6px 10px;
+      text-align: left;
+    }
+
+    table.data-table th {
+      background-color: var(--bg);
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+
+    /* Demo Action Feedback */
+    .demo-feedback-badge {
+      display: inline-block;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: var(--card);
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header -->
+  <header>
+    <div class="title-group">
+      <h1>Multi-Tenant Aggregation Layer</h1>
+      <p>Low-Latency Real-Time Rollups Across 100 Tenant Databases</p>
+    </div>
+    <div class="header-controls">
+      <input type="password" id="adminKeyInput" placeholder="Admin Key" title="Admin Key stored in sessionStorage only">
+      <button id="saveAdminKeyBtn">Set Admin Key</button>
+      <button id="themeToggleBtn">Dark Theme</button>
+    </div>
+  </header>
+
+  <!-- Worker Stalled Alert Banner -->
+  <div id="stalledBanner" class="stalled-banner">
+    CRITICAL WARNING: Aggregation worker is stalled on fail-closed constraint! Stalled tenants reported.
+  </div>
+
+  <!-- Global Error Box -->
+  <div id="errorBox" class="error-box"></div>
+
+  <!-- Tab Navigation -->
+  <nav class="tab-nav">
+    <button class="active" data-tab="tenant">Tenant</button>
+    <button data-tab="platform">Platform</button>
+    <button data-tab="health">Health</button>
+    <button data-tab="scale">Scale</button>
+  </nav>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 1: TENANT -->
+  <!-- ===================================================================== -->
+  <div id="tab-tenant" class="tab-content active">
+    <!-- Controls Bar -->
+    <div class="controls-bar">
+      <div class="controls-group">
+        <label for="tenantSelect" class="card-title" style="margin:0">Tenant:</label>
+        <select id="tenantSelect">
+          <!-- Populated from 1 to 100 -->
+        </select>
+        <input type="password" id="tenantKeyInput" placeholder="Tenant API Key" style="width: 140px;">
+        <button id="saveTenantKeyBtn">Set Key</button>
+      </div>
+
+      <div class="controls-group range-selector" id="tenantRangeBtns">
+        <span class="card-title" style="margin:0">Range:</span>
+        <button data-range="24h" class="active">24h</button>
+        <button data-range="7d">7d</button>
+        <button data-range="30d">30d</button>
+      </div>
+    </div>
+
+    <!-- Data Age & Range Badge -->
+    <div class="data-age-bar">
+      <div><strong>Range Snapped:</strong> <span id="tenantRangeDisplay" class="tabular">Loading...</span></div>
+      <div><strong>Data Age:</strong> <span id="tenantDataAge" class="tabular">0.00s lag</span></div>
+      <div><strong>As Of:</strong> <span id="tenantAsOf" class="tabular">-</span></div>
+    </div>
+
+    <!-- Tiles Grid -->
+    <div class="tiles-grid">
+      <div class="tile">
+        <div class="tile-caption">Total Orders</div>
+        <div class="tile-value-wrap">
+          <span class="tile-value tabular" id="tileOrders">0</span>
+          <span class="tile-unit">orders</span>
+        </div>
+        <div class="tile-note">Includes all lifecycle states</div>
+      </div>
+
+      <div class="tile">
+        <div class="tile-caption">Total Sales</div>
+        <div class="tile-value-wrap">
+          <span class="tile-value tabular" id="tileSales">$0.00</span>
+          <span class="tile-unit">USD</span>
+        </div>
+        <div class="tile-note">Excludes canceled & unavailable</div>
+      </div>
+
+      <div class="tile">
+        <div class="tile-caption">Pipeline Lag</div>
+        <div class="tile-value-wrap">
+          <span class="tile-value tabular" id="tileLag">0.00</span>
+          <span class="tile-unit">sec</span>
+        </div>
+        <div class="tile-note" id="tileLagNote">Target: &le; 0.5s</div>
+      </div>
+
+      <div class="tile">
+        <div class="tile-caption">Worker Status</div>
+        <div class="tile-value-wrap">
+          <span class="tile-value" id="tileStatus" style="font-size: 20px;">Healthy</span>
+          <span class="tile-unit">state</span>
+        </div>
+        <div class="tile-note" id="tileStatusNote">Fail-closed active</div>
+      </div>
+    </div>
+
+    <!-- Live Event Feed -->
+    <div class="live-feed-card">
+      <div class="card-title">Live Mutation Feed</div>
+      <div class="live-feed-list" id="liveFeedList">
+        <div class="live-feed-item"><span style="color:var(--muted)">Awaiting updates...</span></div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-grid-2">
+      <div class="card">
+        <div class="card-title">Order Trend Over Time</div>
+        <div class="chart-container" id="tenantTrendChart"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Orders by Status</div>
+        <div class="chart-container" id="tenantStatusChart"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Top 10 Products by Sales</div>
+      <div class="chart-container" id="tenantTopProductsChart" style="height: 280px;"></div>
+    </div>
+
+    <!-- Demo Controls Panel -->
+    <div class="card">
+      <div class="card-title">Demo Controls (Requires DEMO_MODE=1 and Admin Key)</div>
+      <div class="controls-group" style="margin-top: 8px;">
+        <button id="btnNewOrder" class="btn-primary">New Order</button>
+        <button id="btnCancelLast">Cancel Last</button>
+        <button id="btnFloodTenant">Flood Tenant (10/s)</button>
+        <button id="btnStopFlood">Stop Flood</button>
+        <button id="btnResetDemo">Reset Demo Data</button>
+      </div>
+      <div id="demoBadge" class="demo-feedback-badge" style="display:none;"></div>
+    </div>
+
+    <!-- Direct Query vs Aggregation Layer Benchmark Panel -->
+    <div class="card">
+      <div class="card-title">Direct Tenant Query vs Our Rollup Layer</div>
+      <p style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">
+        Compares naive 30-day top-10 query executed with 5s timeout on raw tenant PostgreSQL vs sub-10ms pre-aggregated rollup.
+      </p>
+      <button id="btnRunComparison" class="btn-primary">Run Head-to-Head Comparison</button>
+      <div class="bench-panel" id="comparisonPanel" style="display:none;">
+        <div class="bench-box">
+          <div class="bench-title">Direct Tenant DB Query (Naive)</div>
+          <div>Execution Time: <span id="naiveTime" class="tabular" style="font-weight:700;">-</span></div>
+          <div>Rows Returned: <span id="naiveRows" class="tabular">-</span></div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Scans raw orders &amp; order_items with joins</div>
+        </div>
+        <div class="bench-box">
+          <div class="bench-title">CyberForge Rollup Layer</div>
+          <div>Execution Time: <span id="rollupTime" class="tabular" style="font-weight:700; color:var(--accent);">-</span></div>
+          <div>Rows Returned: <span id="rollupRows" class="tabular">-</span></div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Indexed query on rollup_product_day</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 2: PLATFORM (Admin Key) -->
+  <!-- ===================================================================== -->
+  <div id="tab-platform" class="tab-content">
+    <div class="controls-bar">
+      <div class="controls-group range-selector" id="platformRangeBtns">
+        <span class="card-title" style="margin:0">Platform Range:</span>
+        <button data-range="24h" class="active">24h</button>
+        <button data-range="7d">7d</button>
+        <button data-range="30d">30d</button>
+      </div>
+      <div class="controls-group">
+        <span class="tabular" id="platformRangeDisplay" style="font-size:12px; color:var(--muted);">All 100 Tenants</span>
+      </div>
+    </div>
+
+    <div class="tiles-grid">
+      <div class="tile">
+        <div class="tile-caption">Platform Total Orders</div>
+        <div class="tile-value-wrap">
+          <span class="tile-value tabular" id="platformOrders">0</span>
+          <span class="tile-unit">orders</span>
+        </div>
+        <div class="tile-note">Aggregated across 100 tenant databases</div>
+      </div>
+
+      <div class="tile">
+        <div class="tile-caption">Platform Total Revenue</div>
+        <div class="tile-value-wrap">
+          <span class="tile-value tabular" id="platformSales">$0.00</span>
+          <span class="tile-unit">USD</span>
+        </div>
+        <div class="tile-note">Live sum of counted order sales</div>
+      </div>
+
+      <div class="tile">
+        <div class="tile-caption">Active Tenants</div>
+        <div class="tile-value-wrap">
+          <span class="tile-value tabular" id="platformTenants">100</span>
+          <span class="tile-unit">databases</span>
+        </div>
+        <div class="tile-note">Isolated schemas</div>
+      </div>
+
+      <div class="tile">
+        <div class="tile-caption">Cluster Stalled</div>
+        <div class="tile-value-wrap">
+          <span class="tile-value tabular" id="platformStalled">0</span>
+          <span class="tile-unit">stalled</span>
+        </div>
+        <div class="tile-note">Per-tenant fail-closed</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Cluster-Wide Order &amp; Sales Trend</div>
+      <div class="chart-container" id="platformTrendChart"></div>
+    </div>
+
+    <div class="charts-grid-equal">
+      <div class="card">
+        <div class="card-title">Top 10 Tenants by Sales Volume</div>
+        <div class="chart-container" id="platformTopTenantsChart" style="height: 260px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Platform Order Status Breakdown</div>
+        <div class="chart-container" id="platformStatusChart" style="height: 260px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 3: HEALTH (Admin Key) -->
+  <!-- ===================================================================== -->
+  <div id="tab-health" class="tab-content">
+    <div class="card">
+      <div class="card-title">Tenant Cluster Health &amp; Replication Lag Heatmap (10x10)</div>
+      <p style="font-size: 12px; color: var(--muted);">
+        Displays current replication lag for all 100 tenant databases. Hover cell for telemetry.
+      </p>
+
+      <div class="heatmap-grid" id="heatmapGrid">
+        <!-- 100 cells generated via JS -->
+      </div>
+
+      <div class="heatmap-legend">
+        <div class="legend-item">
+          <span class="legend-swatch" style="background:var(--ok); border:1px solid var(--ok-border);"></span>
+          <span>&lt; 1.0s Lag (Healthy)</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch" style="background:var(--warn);"></span>
+          <span>1.0s - 5.0s Lag (Warning)</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch" style="background:var(--bad);"></span>
+          <span>&gt; 5.0s Lag (High Lag)</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch" style="background:var(--stalled);"></span>
+          <span>Stalled (Fail-Closed)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tiles-grid">
+      <div class="tile">
+        <div class="tile-caption">Peak Cluster Lag</div>
+        <div class="tile-value-wrap">
+          <span class="tile-value tabular" id="healthMaxLag">0.00</span>
+          <span class="tile-unit">sec</span>
+        </div>
+        <div class="tile-note">Worst lag among active tenants</div>
+      </div>
+
+      <div class="tile">
+        <div class="tile-caption">Stalled Tenants</div>
+        <div class="tile-value-wrap">
+          <span class="tile-value tabular" id="healthStalledCount">0</span>
+          <span class="tile-unit">tenants</span>
+        </div>
+        <div class="tile-note">Isolated; others ingest smoothly</div>
+      </div>
+
+      <div class="tile">
+        <div class="tile-caption">Quarantine Rows</div>
+        <div class="tile-value-wrap">
+          <span class="tile-value tabular" id="healthQuarantineCount">0</span>
+          <span class="tile-unit">rows</span>
+        </div>
+        <div class="tile-note">Malformed rows routed without stall</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Worst Cluster Lag Over Last 60 Seconds</div>
+      <div class="chart-container" id="healthLagLineChart"></div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- TAB 4: SCALE -->
+  <!-- ===================================================================== -->
+  <div id="tab-scale" class="tab-content">
+    <div class="card">
+      <div class="card-title">Benchmark Scaling &amp; Resource Footprint</div>
+      <p style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
+        Loaded dynamically from <code>docs/results/scaling.json</code>. No faked data.
+      </p>
+
+      <div id="scaleNotMeasuredNotice" style="display:none; padding: 20px; text-align: center; color: var(--muted); font-size: 14px;">
+        not measured yet
+      </div>
+
+      <div id="scaleContent" style="display:none;">
+        <div class="tiles-grid">
+          <div class="tile">
+            <div class="tile-caption">Benchmark Hardware</div>
+            <div class="tile-value" id="scaleHardware" style="font-size:15px; margin-top:4px;">-</div>
+            <div class="tile-note" id="scaleDate">-</div>
+          </div>
+          <div class="tile">
+            <div class="tile-caption">Idle Main DB Commits</div>
+            <div class="tile-value-wrap">
+              <span class="tile-value tabular" id="scaleMainCommits">-</span>
+              <span class="tile-unit">commits/s</span>
+            </div>
+            <div class="tile-note">Zero transaction storm</div>
+          </div>
+          <div class="tile">
+            <div class="tile-caption">Idle Rollup DB Commits</div>
+            <div class="tile-value-wrap">
+              <span class="tile-value tabular" id="scaleRollupCommits">-</span>
+              <span class="tile-unit">commits/s</span>
+            </div>
+            <div class="tile-note">Deficit quota batched</div>
+          </div>
+          <div class="tile">
+            <div class="tile-caption">Idle CPU Core Usage</div>
+            <div class="tile-value-wrap">
+              <span class="tile-value tabular" id="scaleCpu">-</span>
+              <span class="tile-unit">cores</span>
+            </div>
+            <div class="tile-note">Resource efficiency</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <div class="card-title">Freshness Latency vs Active Tenants (Poll Mode vs Event Mode)</div>
+          <table class="data-table" id="scaleTable">
+            <thead>
+              <tr>
+                <th>Active Tenants</th>
+                <th class="tabular">Poll p50 (ms)</th>
+                <th class="tabular">Poll p95 (ms)</th>
+                <th class="tabular">Event p50 (ms)</th>
+                <th class="tabular">Event p95 (ms)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Injected by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===========================================================================
+// Multi-Tenant Aggregation Layer - Vanilla Client Engine
+// ===========================================================================
+
+// State
+const state = {
+  activeTab: 'tenant',
+  tenantId: 1,
+  tenantRange: '24h',
+  platformRange: '24h',
+  lastOrderCount: null,
+  lastSales: null,
+  lagHistory: [], // 60 seconds rolling buffer
+  isPolling: true,
+  lastCommitTs: null,
+  orderClickTime: null
+};
+
+// Storage Helpers (Keys kept in sessionStorage ONLY, never in URL)
+function getStoredAdminKey() {
+  return sessionStorage.getItem('admin_key') || 'admin-secret-key-12345';
+}
+function setStoredAdminKey(val) {
+  sessionStorage.setItem('admin_key', val);
+}
+function getStoredTenantKey(tid) {
+  return sessionStorage.getItem(`tenant_key_${tid}`) || `tenant-key-${tid}`;
+}
+function setStoredTenantKey(tid, val) {
+  sessionStorage.setItem(`tenant_key_${tid}`, val);
+}
+
+// Compute ISO Range Strings
+function getRangeTimestamps(rangeKey) {
+  const now = new Date();
+  const to = new Date(now.getTime() + 3600000); // 1h buffer
+  let from = new Date(now.getTime() - 24 * 3600000);
+  let grain = 'hour';
+
+  if (rangeKey === '7d') {
+    from = new Date(now.getTime() - 7 * 24 * 3600000);
+    grain = 'day';
+  } else if (rangeKey === '30d') {
+    from = new Date(now.getTime() - 30 * 24 * 3600000);
+    grain = 'day';
+  }
+  return {
+    from: from.toISOString(),
+    to: to.toISOString(),
+    grain: grain
+  };
+}
+
+// Generic Fetch Wrapper
+async function fetchApi(url, headers = {}) {
+  const res = await fetch(url, { headers });
+  if (res.status === 403) {
+    showError("403 Forbidden: Invalid authentication key provided.");
+    throw new Error("403 Forbidden");
+  }
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`HTTP ${res.status}: ${txt}`);
+  }
+  return await res.json();
+}
+
+function showError(msg) {
+  const box = document.getElementById('errorBox');
+  box.textContent = msg;
+  box.style.display = 'block';
+  setTimeout(() => { box.style.display = 'none'; }, 6000);
+}
+
+// ===========================================================================
+// Central Tenant Data Access Function (getTenantData)
+// All data access goes through this function as required.
+// ===========================================================================
+async function getTenantData(tenantId, rangeKey) {
+  const r = getRangeTimestamps(rangeKey);
+  const tKey = getStoredTenantKey(tenantId);
+  const headers = { 'X-Tenant-Key': tKey };
+  const q = `from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}`;
+
+  const [countRes, trendRes, topRes, statusRes] = await Promise.all([
+    fetchApi(`/tenants/${tenantId}/orders/count?${q}`, headers),
+    fetchApi(`/tenants/${tenantId}/orders/trend?${q}&grain=${r.grain}`, headers),
+    fetchApi(`/tenants/${tenantId}/products/top?${q}&n=10&by=sales`, headers),
+    fetchApi(`/tenants/${tenantId}/orders/by-status?${q}`, headers)
+  ]);
+
+  return {
+    count: countRes,
+    trend: trendRes,
+    topProducts: topRes,
+    status: statusRes
+  };
+}
+
+// ===========================================================================
+// Tab Switching
+// ===========================================================================
+document.querySelectorAll('nav.tab-nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav.tab-nav button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    const tabName = btn.dataset.tab;
+    state.activeTab = tabName;
+    document.getElementById(`tab-${tabName}`).classList.add('active');
+    refreshActiveTab();
+  });
+});
+
+// Theme Toggle
+document.getElementById('themeToggleBtn').addEventListener('click', () => {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  if (isDark) {
+    html.removeAttribute('data-theme');
+    document.getElementById('themeToggleBtn').textContent = 'Dark Theme';
+  } else {
+    html.setAttribute('data-theme', 'dark');
+    document.getElementById('themeToggleBtn').textContent = 'Light Theme';
+  }
+  refreshActiveTab();
+});
+
+// Admin Key Setup
+document.getElementById('saveAdminKeyBtn').addEventListener('click', () => {
+  const val = document.getElementById('adminKeyInput').value.trim();
+  if (val) {
+    setStoredAdminKey(val);
+    alert('Admin key updated in sessionStorage.');
+    refreshActiveTab();
+  }
+});
+
+// Tenant Key Setup
+document.getElementById('saveTenantKeyBtn').addEventListener('click', () => {
+  const val = document.getElementById('tenantKeyInput').value.trim();
+  if (val) {
+    setStoredTenantKey(state.tenantId, val);
+    alert(`Key saved for Tenant ${state.tenantId}`);
+    refreshTenantTab();
+  }
+});
+
+// Populate Tenant Selector (1 to 100)
+const tenantSelect = document.getElementById('tenantSelect');
+for (let i = 1; i <= 100; i++) {
+  const opt = document.createElement('option');
+  opt.value = i;
+  opt.textContent = `Tenant ${i} (tenant_${String(i).padStart(3, '0')})`;
+  tenantSelect.appendChild(opt);
+}
+tenantSelect.addEventListener('change', (e) => {
+  state.tenantId = parseInt(e.target.value, 10);
+  document.getElementById('tenantKeyInput').value = getStoredTenantKey(state.tenantId);
+  state.lastOrderCount = null;
+  state.lastSales = null;
+  refreshTenantTab();
+});
+
+// Range Selectors
+document.querySelectorAll('#tenantRangeBtns button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#tenantRangeBtns button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    state.tenantRange = b.dataset.range;
+    refreshTenantTab();
+  });
+});
+
+document.querySelectorAll('#platformRangeBtns button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#platformRangeBtns button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    state.platformRange = b.dataset.range;
+    refreshPlatformTab();
+  });
+});
+
+// ===========================================================================
+// Render Tenant Tab
+// ===========================================================================
+async function refreshTenantTab() {
+  try {
+    const data = await getTenantData(state.tenantId, state.tenantRange);
+
+    const c = data.count.data;
+    const r = data.count.range;
+    const lag = data.count.lag_seconds || 0.0;
+    const stalled = data.count.worker_stalled || false;
+    const asOf = data.count.as_of;
+
+    // Badges & Meta
+    document.getElementById('tenantRangeDisplay').textContent = `${r.from.slice(0,16)}Z to ${r.to.slice(0,16)}Z`;
+    document.getElementById('tenantDataAge').textContent = `${lag.toFixed(2)}s lag`;
+    document.getElementById('tenantAsOf').textContent = asOf.slice(11, 19);
+
+    // Banner
+    const banner = document.getElementById('stalledBanner');
+    banner.style.display = stalled ? 'block' : 'none';
+
+    // Tiles
+    document.getElementById('tileOrders').textContent = c.order_count.toLocaleString();
+    document.getElementById('tileSales').textContent = `$${c.total_sales.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    document.getElementById('tileLag').textContent = lag.toFixed(2);
+    document.getElementById('tileStatus').textContent = stalled ? 'STALLED' : 'Healthy';
+    document.getElementById('tileStatus').style.color = stalled ? 'var(--bad)' : 'var(--text)';
+
+    // Live Mutation Feed
+    if (state.lastOrderCount !== null) {
+      const diff = c.order_count - state.lastOrderCount;
+      if (diff !== 0) {
+        const sign = diff > 0 ? `+${diff}` : `${diff}`;
+        const timeStr = new Date().toLocaleTimeString('en-GB');
+        addLiveFeedItem(`${sign} orders · ${timeStr}`);
+      }
+    }
+    state.lastOrderCount = c.order_count;
+    state.lastSales = c.total_sales;
+
+    // Check demo visibility latency
+    if (state.lastCommitTs && state.orderClickTime) {
+      const asOfDate = new Date(asOf);
+      const commitDate = new Date(state.lastCommitTs);
+      if (asOfDate >= commitDate) {
+        const serverVisMs = Math.max(0, asOfDate.getTime() - commitDate.getTime());
+        const browserRoundTrip = Math.round(performance.now() - state.orderClickTime);
+        const badge = document.getElementById('demoBadge');
+        badge.innerHTML = `<strong>Visibility:</strong> visible in <span class="tabular">${serverVisMs} ms</span> (server clock) | <strong>Browser round-trip:</strong> <span class="tabular">${browserRoundTrip} ms</span>`;
+        badge.style.display = 'inline-block';
+        state.lastCommitTs = null;
+        state.orderClickTime = null;
+      }
+    }
+
+    // Charts
+    renderTrendChart('tenantTrendChart', data.trend.data);
+    renderStatusChart('tenantStatusChart', data.status.data);
+    renderTopProductsChart('tenantTopProductsChart', data.topProducts.data);
+
+  } catch (err) {
+    console.error("Tenant refresh error:", err);
+  }
+}
+
+function addLiveFeedItem(text) {
+  const list = document.getElementById('liveFeedList');
+  const item = document.createElement('div');
+  item.className = 'live-feed-item';
+  item.innerHTML = `<span>${text}</span><span class="live-feed-time">Tenant ${state.tenantId}</span>`;
+  list.insertBefore(item, list.firstChild);
+  while (list.children.length > 20) {
+    list.removeChild(list.lastChild);
+  }
+}
+
+// ===========================================================================
+// Render Platform Tab
+// ===========================================================================
+async function refreshPlatformTab() {
+  try {
+    const adminKey = getStoredAdminKey();
+    const r = getRangeTimestamps(state.platformRange);
+    const q = `from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}`;
+    const res = await fetchApi(`/admin/platform/summary?${q}`, { 'X-Admin-Key': adminKey });
+
+    document.getElementById('platformOrders').textContent = res.totals.order_count.toLocaleString();
+    document.getElementById('platformSales').textContent = `$${res.totals.total_sales.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    document.getElementById('platformStalled').textContent = res.stalled_tenants_count;
+    document.getElementById('platformRangeDisplay').textContent = `${res.range.from.slice(0,16)}Z to ${res.range.to.slice(0,16)}Z`;
+
+    renderTrendChart('platformTrendChart', res.trend);
+    renderTopTenantsChart('platformTopTenantsChart', res.top_tenants);
+    renderStatusChart('platformStatusChart', res.status_split);
+  } catch (err) {
+    console.error("Platform refresh error:", err);
+  }
+}
+
+// ===========================================================================
+// Render Health Tab
+// ===========================================================================
+async function refreshHealthTab() {
+  try {
+    const adminKey = getStoredAdminKey();
+    const [statsRes, summaryRes] = await Promise.all([
+      fetchApi('/admin/stats', { 'X-Admin-Key': adminKey }),
+      fetchApi(`/admin/platform/summary?from=2026-10-25T00:00:00Z&to=2026-10-30T00:00:00Z`, { 'X-Admin-Key': adminKey })
+    ]);
+
+    const maxLag = statsRes.max_lag_seconds || 0.0;
+    const stalledCount = statsRes.stalled_count || 0;
+    const quarantineCount = summaryRes.quarantine_count || 0;
+
+    document.getElementById('healthMaxLag').textContent = maxLag.toFixed(2);
+    document.getElementById('healthStalledCount').textContent = stalledCount;
+    document.getElementById('healthQuarantineCount').textContent = quarantineCount;
+
+    // Track rolling 60s lag
+    state.lagHistory.push({ time: new Date().toLocaleTimeString('en-GB'), lag: maxLag });
+    if (state.lagHistory.length > 60) state.lagHistory.shift();
+    renderLagLineChart('healthLagLineChart', state.lagHistory);
+
+    // Heatmap Render
+    const grid = document.getElementById('heatmapGrid');
+    grid.innerHTML = '';
+    for (let tid = 1; tid <= 100; tid++) {
+      const tData = statsRes.tenants[String(tid)] || {};
+      const tLag = tData.lag_seconds || 0.0;
+      const tStalled = tData.stalled || false;
+
+      const cell = document.createElement('div');
+      cell.className = 'heatmap-cell';
+      cell.textContent = tid;
+
+      // Color rules:
+      // --ok under 1s, --warn 1-5s, --bad over 5s, --stalled for stalled
+      if (tStalled) {
+        cell.style.backgroundColor = 'var(--stalled)';
+        cell.style.color = '#FFFFFF';
+      } else if (tLag < 1.0) {
+        cell.style.backgroundColor = 'var(--ok)';
+        cell.style.border = '1px solid var(--ok-border)';
+        cell.style.color = 'var(--text)';
+      } else if (tLag <= 5.0) {
+        cell.style.backgroundColor = 'var(--warn)';
+        cell.style.color = '#FFFFFF';
+      } else {
+        cell.style.backgroundColor = 'var(--bad)';
+        cell.style.color = '#FFFFFF';
+      }
+
+      cell.title = `Tenant ${tid} (${tData.database_name || 'db'})\nLag: ${tLag.toFixed(2)}s\nStalled: ${tStalled}\nHeartbeat: ${tData.heartbeat || 'none'}`;
+      grid.appendChild(cell);
+    }
+  } catch (err) {
+    console.error("Health refresh error:", err);
+  }
+}
+
+// ===========================================================================
+// Render Scale Tab
+// ===========================================================================
+async function refreshScaleTab() {
+  const notMeasured = document.getElementById('scaleNotMeasuredNotice');
+  const content = document.getElementById('scaleContent');
+
+  try {
+    const adminKey = getStoredAdminKey();
+    const res = await fetchApi('/admin/platform/scaling', { 'X-Admin-Key': adminKey });
+
+    if (!res || res.status !== 'available' || !res.data) {
+      notMeasured.style.display = 'block';
+      content.style.display = 'none';
+      return;
+    }
+
+    const d = res.data;
+    notMeasured.style.display = 'none';
+    content.style.display = 'block';
+
+    document.getElementById('scaleHardware').textContent = d.hardware || 'Standard Host';
+    document.getElementById('scaleDate').textContent = d.date ? `Measured: ${d.date.slice(0,10)}` : 'Measured recently';
+    document.getElementById('scaleMainCommits').textContent = d.idle.main_db_commits_per_sec ?? '-';
+    document.getElementById('scaleRollupCommits').textContent = d.idle.rollup_db_commits_per_sec ?? '-';
+    document.getElementById('scaleCpu').textContent = d.idle.cpu_usage_cores ?? '-';
+
+    // Populate table
+    const tbody = document.querySelector('#scaleTable tbody');
+    tbody.innerHTML = '';
+
+    const pollMap = {};
+    (d.poll || []).forEach(p => pollMap[p.tenants] = p);
+    const eventMap = {};
+    (d.event || []).forEach(e => eventMap[e.tenants] = e);
+
+    const tenantsKeys = Array.from(new Set([...Object.keys(pollMap), ...Object.keys(eventMap)])).sort((a,b) => Number(a)-Number(b));
+    tenantsKeys.forEach(t => {
+      const p = pollMap[t] || {};
+      const e = eventMap[t] || {};
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>${t} Tenants</strong></td>
+        <td class="tabular">${p.p50_ms != null ? p.p50_ms.toFixed(1) : '-'}</td>
+        <td class="tabular">${p.p95_ms != null ? p.p95_ms.toFixed(1) : '-'}</td>
+        <td class="tabular" style="color:var(--accent); font-weight:700;">${e.p50_ms != null ? e.p50_ms.toFixed(1) : '-'}</td>
+        <td class="tabular" style="color:var(--accent); font-weight:700;">${e.p95_ms != null ? e.p95_ms.toFixed(1) : '-'}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+  } catch (err) {
+    notMeasured.style.display = 'block';
+    content.style.display = 'none';
+  }
+}
+
+// ===========================================================================
+// Hand-Written Clean SVG Charts (No CDN, 1.5px lines, no area fill, --line grid)
+// ===========================================================================
+
+function renderTrendChart(containerId, data) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12px;">No timeseries points in selected range</div>';
+    return;
+  }
+
+  const w = 600;
+  const h = 220;
+  const pad = { top: 20, right: 30, bottom: 35, left: 55 };
+  const plotW = w - pad.left - pad.right;
+  const plotH = h - pad.top - pad.bottom;
+
+  const maxVal = Math.max(...data.map(d => d.order_count), 1);
+  const n = data.length;
+
+  let points = data.map((d, i) => {
+    const x = pad.left + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+    const y = pad.top + plotH - (d.order_count / maxVal) * plotH;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  // Grid lines
+  let gridHtml = '';
+  for (let step = 0; step <= 4; step++) {
+    const yVal = pad.top + (plotH / 4) * step;
+    const labelVal = Math.round(maxVal - (maxVal / 4) * step);
+    gridHtml += `<line x1="${pad.left}" y1="${yVal}" x2="${w - pad.right}" y2="${yVal}" stroke="var(--line)" stroke-width="1" />`;
+    gridHtml += `<text x="${pad.left - 8}" y="${yVal + 4}" fill="var(--muted)" font-size="10" text-anchor="end" font-family="monospace">${labelVal}</text>`;
+  }
+
+  // X labels (first and last)
+  const firstLabel = data[0].bucket.slice(11, 16);
+  const lastLabel = data[n - 1].bucket.slice(11, 16);
+  gridHtml += `<text x="${pad.left}" y="${h - 10}" fill="var(--muted)" font-size="10" text-anchor="start" font-family="monospace">${firstLabel}</text>`;
+  gridHtml += `<text x="${w - pad.right}" y="${h - 10}" fill="var(--muted)" font-size="10" text-anchor="end" font-family="monospace">${lastLabel}</text>`;
+
+  container.innerHTML = `
+    <svg class="chart-svg" viewBox="0 0 ${w} ${h}">
+      ${gridHtml}
+      <polyline fill="none" stroke="var(--accent)" stroke-width="1.5" points="${points}" />
+    </svg>
+  `;
+}
+
+function renderStatusChart(containerId, data) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12px;">No status data</div>';
+    return;
+  }
+
+  const w = 400;
+  const h = 220;
+  const pad = { top: 20, right: 30, bottom: 20, left: 85 };
+  const plotW = w - pad.left - pad.right;
+  const maxVal = Math.max(...data.map(d => d.order_count), 1);
+  const barH = Math.min(22, (h - pad.top - pad.bottom) / data.length - 6);
+
+  let barsHtml = '';
+  data.forEach((d, i) => {
+    const y = pad.top + i * (barH + 6);
+    const bw = Math.max(2, (d.order_count / maxVal) * plotW);
+    barsHtml += `
+      <text x="${pad.left - 6}" y="${y + barH * 0.7}" fill="var(--text)" font-size="11" text-anchor="end">${d.status}</text>
+      <rect x="${pad.left}" y="${y}" width="${bw}" height="${barH}" fill="var(--accent)" rx="2" />
+      <text x="${pad.left + bw + 6}" y="${y + barH * 0.7}" fill="var(--muted)" font-size="10" font-family="monospace">${d.order_count}</text>
+    `;
+  });
+
+  container.innerHTML = `
+    <svg class="chart-svg" viewBox="0 0 ${w} ${h}">
+      ${barsHtml}
+    </svg>
+  `;
+}
+
+function renderTopProductsChart(containerId, data) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12px;">No product sales in range</div>';
+    return;
+  }
+
+  const w = 600;
+  const h = 260;
+  const pad = { top: 15, right: 90, bottom: 15, left: 130 };
+  const plotW = w - pad.left - pad.right;
+  const maxSales = Math.max(...data.map(d => d.sales), 1);
+  const barH = Math.min(18, (h - pad.top - pad.bottom) / data.length - 4);
+
+  let barsHtml = '';
+  data.forEach((d, i) => {
+    const y = pad.top + i * (barH + 4);
+    const bw = Math.max(2, (d.sales / maxSales) * plotW);
+    const label = `P#${d.product_id} (${d.category})`;
+    barsHtml += `
+      <text x="${pad.left - 8}" y="${y + barH * 0.75}" fill="var(--text)" font-size="11" text-anchor="end">${label}</text>
+      <rect x="${pad.left}" y="${y}" width="${bw}" height="${barH}" fill="var(--accent)" rx="2" />
+      <text x="${pad.left + bw + 8}" y="${y + barH * 0.75}" fill="var(--text)" font-size="10" font-family="monospace">$${Math.round(d.sales).toLocaleString()}</text>
+    `;
+  });
+
+  container.innerHTML = `
+    <svg class="chart-svg" viewBox="0 0 ${w} ${h}">
+      ${barsHtml}
+    </svg>
+  `;
+}
+
+function renderTopTenantsChart(containerId, data) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12px;">No tenant sales data</div>';
+    return;
+  }
+
+  const w = 450;
+  const h = 240;
+  const pad = { top: 15, right: 80, bottom: 15, left: 95 };
+  const plotW = w - pad.left - pad.right;
+  const maxSales = Math.max(...data.map(d => d.sales), 1);
+  const barH = Math.min(16, (h - pad.top - pad.bottom) / data.length - 4);
+
+  let barsHtml = '';
+  data.forEach((d, i) => {
+    const y = pad.top + i * (barH + 4);
+    const bw = Math.max(2, (d.sales / maxSales) * plotW);
+    barsHtml += `
+      <text x="${pad.left - 6}" y="${y + barH * 0.75}" fill="var(--text)" font-size="11" text-anchor="end">Tenant ${d.tenant_id}</text>
+      <rect x="${pad.left}" y="${y}" width="${bw}" height="${barH}" fill="var(--accent)" rx="2" />
+      <text x="${pad.left + bw + 6}" y="${y + barH * 0.75}" fill="var(--muted)" font-size="10" font-family="monospace">$${Math.round(d.sales).toLocaleString()}</text>
+    `;
+  });
+
+  container.innerHTML = `
+    <svg class="chart-svg" viewBox="0 0 ${w} ${h}">
+      ${barsHtml}
+    </svg>
+  `;
+}
+
+function renderLagLineChart(containerId, history) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (!history || history.length === 0) {
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12px;">Gathering lag samples...</div>';
+    return;
+  }
+
+  const w = 600;
+  const h = 200;
+  const pad = { top: 20, right: 30, bottom: 30, left: 50 };
+  const plotW = w - pad.left - pad.right;
+  const plotH = h - pad.top - pad.bottom;
+
+  const maxVal = Math.max(1.0, ...history.map(d => d.lag));
+  const n = history.length;
+
+  let points = history.map((d, i) => {
+    const x = pad.left + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+    const y = pad.top + plotH - (d.lag / maxVal) * plotH;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  let gridHtml = '';
+  for (let s = 0; s <= 3; s++) {
+    const yVal = pad.top + (plotH / 3) * s;
+    const lVal = (maxVal - (maxVal / 3) * s).toFixed(1);
+    gridHtml += `<line x1="${pad.left}" y1="${yVal}" x2="${w - pad.right}" y2="${yVal}" stroke="var(--line)" stroke-width="1" />`;
+    gridHtml += `<text x="${pad.left - 6}" y="${yVal + 4}" fill="var(--muted)" font-size="10" text-anchor="end" font-family="monospace">${lVal}s</text>`;
+  }
+
+  const t0 = history[0].time;
+  const t1 = history[n - 1].time;
+  gridHtml += `<text x="${pad.left}" y="${h - 10}" fill="var(--muted)" font-size="10" text-anchor="start" font-family="monospace">${t0}</text>`;
+  gridHtml += `<text x="${w - pad.right}" y="${h - 10}" fill="var(--muted)" font-size="10" text-anchor="end" font-family="monospace">${t1}</text>`;
+
+  container.innerHTML = `
+    <svg class="chart-svg" viewBox="0 0 ${w} ${h}">
+      ${gridHtml}
+      <polyline fill="none" stroke="var(--accent)" stroke-width="1.5" points="${points}" />
+    </svg>
+  `;
+}
+
+// ===========================================================================
+// Demo Actions
+// ===========================================================================
+document.getElementById('btnNewOrder').addEventListener('click', async () => {
+  try {
+    const adminKey = getStoredAdminKey();
+    state.orderClickTime = performance.now();
+    const res = await fetchApi('/demo/order', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Key': adminKey
+      },
+      body: JSON.stringify({ tenant_id: state.tenantId })
+    });
+    state.lastCommitTs = res.commit_ts;
+    const badge = document.getElementById('demoBadge');
+    badge.textContent = `Order #${res.order_id} committed at ${res.commit_ts.slice(11,23)}Z. Waiting for aggregation layer echo...`;
+    badge.style.display = 'inline-block';
+    refreshTenantTab();
+  } catch (err) {
+    showError("Demo Order Error: " + err.message);
+  }
+});
+
+document.getElementById('btnCancelLast').addEventListener('click', async () => {
+  try {
+    const adminKey = getStoredAdminKey();
+    const res = await fetchApi('/demo/cancel', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Key': adminKey
+      },
+      body: JSON.stringify({ tenant_id: state.tenantId })
+    });
+    alert(`Demo Cancel: Status=${res.status}, Order=${res.order_id || 'none'}`);
+    refreshTenantTab();
+  } catch (err) {
+    showError("Demo Cancel Error: " + err.message);
+  }
+});
+
+document.getElementById('btnFloodTenant').addEventListener('click', async () => {
+  try {
+    const adminKey = getStoredAdminKey();
+    const res = await fetchApi('/demo/flood', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Key': adminKey
+      },
+      body: JSON.stringify({ tenant_id: state.tenantId, n: 10 })
+    });
+    alert(`Flood Started on Tenant ${state.tenantId} at 10 orders/s (auto-stops after 60s)`);
+  } catch (err) {
+    showError("Demo Flood Error: " + err.message);
+  }
+});
+
+document.getElementById('btnStopFlood').addEventListener('click', async () => {
+  try {
+    const adminKey = getStoredAdminKey();
+    await fetchApi('/demo/flood/stop', {
+      method: 'POST',
+      headers: { 'X-Admin-Key': adminKey }
+    });
+    alert('Flood stopped.');
+  } catch (err) {
+    showError("Demo Stop Error: " + err.message);
+  }
+});
+
+document.getElementById('btnResetDemo').addEventListener('click', async () => {
+  try {
+    const adminKey = getStoredAdminKey();
+    const res = await fetchApi('/demo/reset', {
+      method: 'POST',
+      headers: { 'X-Admin-Key': adminKey }
+    });
+    alert(`Demo data reset complete. Deleted orders: ${res.deleted_orders}, Deleted items: ${res.deleted_items}`);
+    refreshTenantTab();
+  } catch (err) {
+    showError("Demo Reset Error: " + err.message);
+  }
+});
+
+// Head-to-Head Comparison Button
+document.getElementById('btnRunComparison').addEventListener('click', async () => {
+  try {
+    const panel = document.getElementById('comparisonPanel');
+    panel.style.display = 'grid';
+    document.getElementById('naiveTime').textContent = 'Querying...';
+    document.getElementById('rollupTime').textContent = 'Querying...';
+
+    const adminKey = getStoredAdminKey();
+    const tKey = getStoredTenantKey(state.tenantId);
+
+    // 1. Direct Naive Query
+    const naiveRes = await fetchApi(`/demo/naive/${state.tenantId}`, { 'X-Admin-Key': adminKey });
+    document.getElementById('naiveTime').textContent = `${naiveRes.elapsed_ms.toFixed(1)} ms`;
+    document.getElementById('naiveRows').textContent = `${naiveRes.rows_count} rows`;
+
+    // 2. Rollup Aggregation Layer Query
+    const r = getRangeTimestamps('30d');
+    const t0 = performance.now();
+    const rollupRes = await fetchApi(`/tenants/${state.tenantId}/products/top?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}&n=10&by=sales`, {
+      'X-Tenant-Key': tKey
+    });
+    const rollupElapsed = performance.now() - t0;
+
+    document.getElementById('rollupTime').textContent = `${rollupElapsed.toFixed(2)} ms (${Math.round(naiveRes.elapsed_ms / Math.max(1, rollupElapsed))}x faster)`;
+    document.getElementById('rollupRows').textContent = `${rollupRes.data.length} rows`;
+
+  } catch (err) {
+    showError("Comparison Error: " + err.message);
+  }
+});
+
+// ===========================================================================
+// Polling Loop & Tab Visibility Awareness
+// ===========================================================================
+async function refreshActiveTab() {
+  if (state.activeTab === 'tenant') {
+    await refreshTenantTab();
+  } else if (state.activeTab === 'platform') {
+    await refreshPlatformTab();
+  } else if (state.activeTab === 'health') {
+    await refreshHealthTab();
+  } else if (state.activeTab === 'scale') {
+    await refreshScaleTab();
+  }
+}
+
+// 1s Polling Interval (pauses when document is hidden)
+setInterval(() => {
+  if (document.hidden) return; // pause polling when tab is hidden
+  refreshActiveTab();
+}, 1000);
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    refreshActiveTab();
+  }
+});
+
+// Initial boot
+refreshActiveTab();
+</script>
+</body>
+</html>
