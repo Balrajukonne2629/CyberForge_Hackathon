@@ -16,7 +16,8 @@ def run_sse_push_test(profile: str = "1m", probes: int = 50):
     print("=" * 70)
 
     tid = 1
-    api_url = "http://127.0.0.1:8000"
+    api_port = os.getenv("API_PORT", "8000")
+    api_url = f"http://127.0.0.1:{api_port}"
     valid_key = f"tenant-key-{tid}"
     wrong_key = "wrong-key-999"
     t_url = get_tenant_db_url(tid, profile)

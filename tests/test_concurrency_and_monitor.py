@@ -9,11 +9,14 @@ import sys, os, time, asyncio, httpx, numpy as np
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from config import get_config
 
-API_URL = "http://127.0.0.1:8000"
+def get_api_url() -> str:
+    return f"http://127.0.0.1:{os.getenv('API_PORT', '8000')}"
+
 cfg = get_config("1m")
 ADMIN_KEY = cfg.get("auth", {}).get("admin_key", "admin-secret-key-12345")
 
 async def test_b3_concurrency_throttle():
+    api_url = get_api_url()
     print("=" * 70)
     print("1. TESTING B-3: PER-TENANT CONCURRENCY LIMITS & FLOOD ISOLATION")
     print("=" * 70)
@@ -23,7 +26,7 @@ async def test_b3_concurrency_throttle():
     target_url = "/tenants/{}/orders/count?from=2026-10-01T00:00:00Z&to=2026-10-30T00:00:00Z"
 
     # Pre-warm server connection and endpoint query
-    async with httpx.AsyncClient(base_url=API_URL, timeout=5.0) as client:
+    async with httpx.AsyncClient(base_url=api_url, timeout=5.0) as client:
         r = await client.get("/health")
         assert r.status_code == 200
         r = await client.get(target_url.format(2), headers=t2_headers)
@@ -34,8 +37,8 @@ async def test_b3_concurrency_throttle():
     t2_results = []
 
     limits = httpx.Limits(max_connections=100, max_keepalive_connections=100)
-    async with httpx.AsyncClient(base_url=API_URL, limits=limits, timeout=10.0) as flood_client, \
-               httpx.AsyncClient(base_url=API_URL, limits=limits, timeout=10.0) as t2_client:
+    async with httpx.AsyncClient(base_url=api_url, limits=limits, timeout=10.0) as flood_client, \
+               httpx.AsyncClient(base_url=api_url, limits=limits, timeout=10.0) as t2_client:
 
         # Pre-warm connection for observer tenant
         await t2_client.get(target_url.format(2), headers=t2_headers)
@@ -52,7 +55,7 @@ async def test_b3_concurrency_throttle():
         # Send observer requests while flood is actively hitting Tenant 1
         async def observer_t2():
             await asyncio.sleep(0.005) # ensure flood is in-flight
-            for _ in range(25):
+            for _ in range(50):
                 t0 = time.perf_counter()
                 res = await t2_client.get(target_url.format(2), headers=t2_headers)
                 dur = (time.perf_counter() - t0) * 1000.0
@@ -84,8 +87,8 @@ async def test_b3_concurrency_throttle():
     p95_t2 = float(np.percentile(t2_lats, 95))
 
     print(f"\nTenant 2 (Concurrent Observer during Tenant 1 Flood):")
-    print(f"  - 200 OK responses : {len(t2_200)}/25")
-    print(f"  - 429 Throttled    : {len(t2_429)}/25 (Expected: 0)")
+    print(f"  - 200 OK responses : {len(t2_200)}/{len(t2_results)}")
+    print(f"  - 429 Throttled    : {len(t2_429)}/{len(t2_results)} (Expected: 0)")
     print(f"  - Latency p50      : {p50_t2:.2f} ms")
     print(f"  - Latency p95      : {p95_t2:.2f} ms")
 
@@ -94,11 +97,12 @@ async def test_b3_concurrency_throttle():
     print(">>> B-3 CONCURRENCY THROTTLE & ISOLATION PASSED! <<<")
 
 async def test_b5_admin_monitor():
+    api_url = get_api_url()
     print("\n" + "=" * 70)
     print("2. TESTING B-5: ADMIN MONITOR TELEMETRY ENDPOINT (/admin/monitor)")
     print("=" * 70)
 
-    async with httpx.AsyncClient(base_url=API_URL, timeout=10.0) as client:
+    async with httpx.AsyncClient(base_url=api_url, timeout=10.0) as client:
         # 1. Auth tests
         r = await client.get("/admin/monitor")
         assert r.status_code == 403, f"Expected 403 for missing key, got {r.status_code}"
@@ -136,11 +140,12 @@ async def test_b5_admin_monitor():
         print(">>> B-5 ADMIN MONITOR ENDPOINT PASSED! <<<")
 
 async def test_b1_b2_rebuild_and_metadata():
+    api_url = get_api_url()
     print("\n" + "=" * 70)
     print("3. TESTING B-1 & B-2: AS_OF / LAG_SECONDS & SINGLE-TENANT REBUILD")
     print("=" * 70)
 
-    async with httpx.AsyncClient(base_url=API_URL, timeout=30.0) as client:
+    async with httpx.AsyncClient(base_url=api_url, timeout=30.0) as client:
         # Check all endpoints return as_of and lag_seconds
         endpoints = [
             "/tenants/1/orders/count?from=2026-10-01T00:00:00Z&to=2026-10-30T00:00:00Z",

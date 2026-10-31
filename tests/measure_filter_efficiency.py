@@ -15,8 +15,22 @@ def measure():
     conn.autocommit = False
     cur = conn.cursor()
 
-    cur.execute("SELECT max(order_id) FROM orders")
-    max_oid = cur.fetchone()[0]
+    cur.execute("SELECT customer_id FROM customers WHERE tenant_id = %s LIMIT 1", (tid,))
+    cid = cur.fetchone()[0]
+
+    # Pre-clean test IDs >= 900M
+    base_test_id = 980_000_000
+    cur.execute("DELETE FROM order_items WHERE order_id >= %s AND order_id < %s", (base_test_id, base_test_id + 100))
+    cur.execute("DELETE FROM orders WHERE order_id >= %s AND order_id < %s", (base_test_id, base_test_id + 100))
+    conn.commit()
+
+    # Seed 50 test orders >= 900M
+    for idx in range(50):
+        toid = base_test_id + idx + 1
+        st = "delivered" if idx % 2 == 0 else "shipped"
+        cur.execute("INSERT INTO orders (order_id, tenant_id, customer_id, status, total, created_at, updated_at) "
+                    "VALUES (%s, %s, %s, %s, 100.00, now(), now())", (toid, tid, cid, st))
+    conn.commit()
 
     # Sample 1,000 writes (800 point reads / updated_at, 100 inserts, 100 status updates)
     print("=" * 70)
@@ -31,38 +45,43 @@ def measure():
     irrelevant_count = 0
     relevant_count = 0
 
-    for i in range(1000):
-        oid = rng.randint(1, max_oid)
-        r = rng.random()
-        if r < 0.40:
-            # Irrelevant update: touch updated_at only
-            cur.execute("UPDATE orders SET updated_at = clock_timestamp() WHERE order_id = %s", (oid,))
-            conn.commit()
-            irrelevant_count += 1
-        elif r < 0.70:
-            # Relevant update: advance status
-            cur.execute("UPDATE orders SET status = 'delivered', total = total WHERE order_id = %s", (oid,))
-            conn.commit()
-            relevant_count += 1
-        else:
-            # Relevant update: modify total
-            cur.execute("UPDATE orders SET total = total + 1.00 WHERE order_id = %s", (oid,))
-            conn.commit()
-            relevant_count += 1
+    try:
+        for i in range(1000):
+            oid = base_test_id + 1 + (i % 50)
+            r = rng.random()
+            if r < 0.40:
+                # Irrelevant update: touch updated_at only
+                cur.execute("UPDATE orders SET updated_at = clock_timestamp() WHERE order_id = %s", (oid,))
+                conn.commit()
+                irrelevant_count += 1
+            elif r < 0.70:
+                # Relevant update: advance status
+                cur.execute("UPDATE orders SET status = 'delivered', total = total WHERE order_id = %s", (oid,))
+                conn.commit()
+                relevant_count += 1
+            else:
+                # Relevant update: modify total
+                cur.execute("UPDATE orders SET total = total + 1.00 WHERE order_id = %s", (oid,))
+                conn.commit()
+                relevant_count += 1
 
-    cur.execute("SELECT count(*) FROM outbox")
-    ob_end = cur.fetchone()[0]
-    emitted = ob_end - ob_start
+        cur.execute("SELECT count(*) FROM outbox")
+        ob_end = cur.fetchone()[0]
+        emitted = ob_end - ob_start
 
-    print(f"Total simulator write operations : 1,000")
-    print(f"  - Irrelevant updates (updated_at) : {irrelevant_count}")
-    print(f"  - Relevant updates (status/total)  : {relevant_count}")
-    print(f"Total outbox rows emitted WITH early filter: {emitted}")
-    
-    # Without filter, the 400 irrelevant updates would have also run checks or emitted redundant rows
-    print(f"Filtered outbox events saved: {irrelevant_count} unnecessary trigger executions completely bypassed!")
-    print("=" * 70)
-    conn.close()
+        print(f"Total simulator write operations : 1,000")
+        print(f"  - Irrelevant updates (updated_at) : {irrelevant_count}")
+        print(f"  - Relevant updates (status/total)  : {relevant_count}")
+        print(f"Total outbox rows emitted WITH early filter: {emitted}")
+        
+        # Without filter, the 400 irrelevant updates would have also run checks or emitted redundant rows
+        print(f"Filtered outbox events saved: {irrelevant_count} unnecessary trigger executions completely bypassed!")
+        print("=" * 70)
+    finally:
+        cur.execute("DELETE FROM order_items WHERE order_id >= %s AND order_id < %s", (base_test_id, base_test_id + 100))
+        cur.execute("DELETE FROM orders WHERE order_id >= %s AND order_id < %s", (base_test_id, base_test_id + 100))
+        conn.commit()
+        conn.close()
 
 if __name__ == "__main__":
     measure()

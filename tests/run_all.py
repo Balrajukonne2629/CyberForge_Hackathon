@@ -4,9 +4,20 @@ Unified Trust & Measurement Test Suite for Multi-Tenant Aggregation Layer:
 Runs all 11 test suites for a given profile (1m or 10m).
 Exits non-zero on any failure.
 """
-import sys, os, time, argparse, subprocess, httpx, psycopg2
+import sys, os, time, argparse, subprocess, httpx, psycopg2, socket
 from typing import Optional
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+def find_free_port(preferred: int = 8000) -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("127.0.0.1", preferred))
+            return preferred
+        except OSError:
+            pass
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 from tests.test_isolation import run_isolation_tests
 from tests.test_idempotency import run_idempotency_test
@@ -47,9 +58,10 @@ def wait_for_api_ready(api_url: Optional[str] = None, max_wait: float = 15.0):
             time.sleep(0.5)
     raise TimeoutError("FastAPI server failed to start within timeout")
 
-def run_all(profile: str):
+def run_all(profile: str, smoke: bool = False):
     print("=" * 70)
-    print(f"RUNNING ALL TRUST & INTEGRITY TESTS (PROFILE: {profile.upper()})")
+    mode_label = "SMOKE SUITE" if smoke else "ALL TRUST & INTEGRITY TESTS"
+    print(f"RUNNING {mode_label} (PROFILE: {profile.upper()})")
     print("=" * 70)
 
     cfg = get_config(profile)
@@ -59,14 +71,19 @@ def run_all(profile: str):
     reset_all_worker_state(rollup_url)
 
     # 2. Restart API cleanly for the requested profile
+    raw_port = os.getenv("API_PORT")
+    api_port = int(raw_port) if raw_port else find_free_port(8000)
+    os.environ["API_PORT"] = str(api_port)
+    api_url = f"http://127.0.0.1:{api_port}"
     p_api = None
     try:
-        subprocess.run(["powershell", "-Command", "Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*uvicorn*' } | Stop-Process -Force"], timeout=5)
+        subprocess.run(["powershell", "-Command", f"Get-NetTCPConnection -LocalPort {api_port} -ErrorAction SilentlyContinue | ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}"], timeout=5)
     except Exception:
         pass
-    time.sleep(1.0)
-
-    api_port = os.getenv("API_PORT", "8000")
+    time.sleep(0.5)
+    # Re-check port in case it was occupied
+    api_port = find_free_port(api_port)
+    os.environ["API_PORT"] = str(api_port)
     api_url = f"http://127.0.0.1:{api_port}"
     print(f"Starting FastAPI server on port {api_port} (profile: {profile})...")
     p_api = subprocess.Popen([sys.executable, "-m", "uvicorn", "api.main:app", "--port", str(api_port), "--no-access-log"], env=dict(os.environ, PROFILE=profile))
@@ -92,23 +109,29 @@ def run_all(profile: str):
             p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile, "--mode", "event", "--debounce-ms", "10"])
             time.sleep(1.5)
 
-    # All 11 suites as required
     suites = [
         ("1. Tenant Isolation", lambda: run_isolation_tests(profile), False),
         ("2. Idempotency per-tenant", lambda: run_idempotency_test(profile), False),
         ("3. Out-of-Order Commit per-tenant", lambda: run_out_of_order_test(profile), False),
         ("4. Single-Tenant Mutation & Fan-out", lambda: run_mutations(profile, tenant_id=1), False),
-        ("5. Concurrent Multi-Tenant Updates (25 DBs)", lambda: run_concurrent_multi_tenant_test(profile, tenant_count=25), False),
-        ("6. Fairness & Anti-Starvation", lambda: run_fairness_test(profile, flood_count=2000), False),
+        ("5. Concurrent Multi-Tenant Updates (25 DBs)", lambda: run_concurrent_multi_tenant_test(profile, tenant_count=5 if smoke else 25), False),
+        ("6. Fairness & Anti-Starvation", lambda: run_fairness_test(profile, flood_count=200 if smoke else 2000), False),
         ("7. Quarantine Handling", lambda: run_quarantine_test(profile), False),
         ("8. Crash Recovery per-tenant", lambda: run_crash_recovery_test(profile), True),  # Manages its own worker
         ("9. Per-Tenant Fail Closed & Stall Isolation", lambda: run_fail_closed_test(profile), False),
-        ("10. Rebuild Equality under Load per-tenant", lambda: run_rebuild_equality_test(profile), True),  # Manages its own worker
-        ("11. Golden Ground-Truth Parity vs Tenant DBs", lambda: (wait_for_worker(profile) is None and run_golden_check(profile)), False),
-        ("12. Event-Driven Lost-Notification Recovery", lambda: test_lost_notification(), True),
-        ("13. Push SSE Stream Latency", lambda: run_sse_push_test(profile, probes=20), False),
-        ("14. Concurrency Limit & Admin Monitor", lambda: run_concurrency_and_monitor_tests(), False),
     ]
+
+    if not smoke:
+        suites.extend([
+            ("10. Rebuild Equality under Load per-tenant", lambda: run_rebuild_equality_test(profile), True),  # Manages its own worker
+            ("11. Golden Ground-Truth Parity vs Tenant DBs", lambda: (wait_for_worker(profile) is None and run_golden_check(profile)), False),
+        ])
+
+    suites.extend([
+        ("12. Event-Driven Lost-Notification Recovery", lambda: test_lost_notification(), True),
+        ("13. Push SSE Stream Latency", lambda: run_sse_push_test(profile, probes=10 if smoke else 20), False),
+        ("14. Concurrency Limit & Admin Monitor", lambda: run_concurrency_and_monitor_tests(), False),
+    ])
 
     results = []
     failed = False
@@ -176,5 +199,6 @@ def run_all(profile: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Unified test harness for CyberForge aggregation layer.")
     parser.add_argument("--profile", default="1m", choices=["1m", "10m"], help="Profile to test")
+    parser.add_argument("--smoke", action="store_true", help="Run smoke test suite (under 2 min)")
     args = parser.parse_args()
-    run_all(args.profile)
+    run_all(args.profile, smoke=args.smoke)

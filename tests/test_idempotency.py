@@ -49,7 +49,7 @@ def run_idempotency_test(profile: str = "1m"):
         init_xid, init_id = (row0[0], row0[1]) if row0 else ('0', 0)
 
         # Step 1: Inject an active test batch into the tenant outbox
-        test_hour = "2026-10-29 11:00:00"
+        test_hour = "2029-01-01 12:00:00"
         t_cur.execute("""
             INSERT INTO outbox (kind, tenant_id, bucket_ts, status, delta_count, delta_amount)
             VALUES 
