@@ -1,6 +1,23 @@
 profile: "1m"
 layout: "per_tenant" # "per_tenant" (official submission) | "single" (baseline)
 
+worker:
+  mode: "event" # "event" | "poll"
+  safety_sweep_interval: 5.0
+  debounce_ms: 15
+  deficit_quota: 500
+
+filter:
+  enabled: true
+  order_columns:
+    - "status"
+    - "created_at"
+    - "total"
+  item_columns:
+    - "qty"
+    - "price"
+    - "product_id"
+
 tenant_db:
   host: "127.0.0.1"
   port: 5432

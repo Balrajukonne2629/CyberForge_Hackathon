@@ -13,7 +13,8 @@ import os, datetime, asyncio
 from contextlib import asynccontextmanager
 from typing import Optional, Literal, Dict
 from fastapi import FastAPI, Header, HTTPException, Query, Path
-import asyncpg
+from fastapi.responses import StreamingResponse
+import asyncpg, json
 
 from config import get_config
 
@@ -93,28 +94,17 @@ async def get_tenant_metadata(tenant_id: int):
     if not row:
         return 0.0, False, as_of
 
-    lag = float(row["lag_seconds"])
+    lag = float(row["lag_seconds"] or 0.0)
     stalled = bool(row["stalled"])
-    heartbeat = row["heartbeat"]
-    last_batch = row["last_batch_at"]
     has_pending = bool(row["has_pending"])
     oldest_pending = row["oldest_pending_ts"]
 
-    hb_utc = heartbeat.replace(tzinfo=datetime.timezone.utc) if heartbeat and heartbeat.tzinfo is None else heartbeat
-    hb_age = (now - hb_utc).total_seconds() if hb_utc else 999.0
-
-    # If worker heartbeat is stale (> 2.5s)
-    if hb_age > 2.5:
-        if oldest_pending:
-            op_utc = oldest_pending.replace(tzinfo=datetime.timezone.utc) if oldest_pending.tzinfo is None else oldest_pending
-            lag = max(lag, round((now - op_utc).total_seconds(), 2))
-        elif last_batch:
-            lb_utc = last_batch.replace(tzinfo=datetime.timezone.utc) if last_batch.tzinfo is None else last_batch
-            lag = max(lag, round((now - lb_utc).total_seconds(), 2))
-        else:
-            lag = round(hb_age, 2)
-    elif not has_pending:
+    # lag_seconds = now minus ENQUEUE time (outbox.created_at) of oldest pending row, 0 if none
+    if not has_pending or oldest_pending is None:
         lag = 0.0
+    else:
+        op_utc = oldest_pending.replace(tzinfo=datetime.timezone.utc) if oldest_pending.tzinfo is None else oldest_pending
+        lag = max(0.0, round((now - op_utc).total_seconds(), 3))
 
     return lag, stalled, as_of
 
@@ -410,6 +400,92 @@ async def get_orders_by_status(
         "lag_seconds": lag,
         "worker_stalled": stalled
     }
+
+@app.get("/tenants/{tenant_id}/stream")
+async def stream_tenant_updates(
+    tenant_id: int = Path(...),
+    x_tenant_key: Optional[str] = Header(None, alias="X-Tenant-Key")
+):
+    verify_tenant_auth(tenant_id, x_tenant_key)
+    assert pool is not None
+
+    async def event_generator():
+        async with pool.acquire() as conn:
+            queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+
+            def on_notify(connection, pid, channel, payload):
+                if payload == str(tenant_id):
+                    try:
+                        queue.put_nowait(payload)
+                    except asyncio.QueueFull:
+                        pass
+
+            await conn.add_listener("rollup_updated", on_notify)
+            try:
+                # Send immediate initial state
+                lag, stalled, as_of = await get_tenant_metadata(tenant_id)
+                bucket_rows = await conn.fetch("""
+                    SELECT hour, status, order_count, revenue
+                    FROM rollup_orders_hour
+                    WHERE tenant_id = $1
+                    ORDER BY hour DESC
+                    LIMIT 5
+                """, tenant_id)
+                buckets = [
+                    {"hour": r["hour"].isoformat(), "status": r["status"], "count": r["order_count"], "revenue": float(r["revenue"])}
+                    for r in bucket_rows
+                ]
+                init_msg = json.dumps({
+                    "as_of": as_of,
+                    "lag_seconds": lag,
+                    "worker_stalled": stalled,
+                    "changed_buckets": buckets
+                })
+                yield f"data: {init_msg}\n\n"
+
+                # Stream updates on NOTIFY
+                while True:
+                    try:
+                        await asyncio.wait_for(queue.get(), timeout=15.0)
+                        while not queue.empty():
+                            queue.get_nowait()
+
+                        lag, stalled, as_of = await get_tenant_metadata(tenant_id)
+                        bucket_rows = await conn.fetch("""
+                            SELECT hour, status, order_count, revenue
+                            FROM rollup_orders_hour
+                            WHERE tenant_id = $1
+                            ORDER BY hour DESC
+                            LIMIT 5
+                        """, tenant_id)
+                        buckets = [
+                            {"hour": r["hour"].isoformat(), "status": r["status"], "count": r["order_count"], "revenue": float(r["revenue"])}
+                            for r in bucket_rows
+                        ]
+                        msg = json.dumps({
+                            "as_of": as_of,
+                            "lag_seconds": lag,
+                            "worker_stalled": stalled,
+                            "changed_buckets": buckets
+                        })
+                        yield f"data: {msg}\n\n"
+                    except asyncio.TimeoutError:
+                        yield ": keepalive\n\n"
+            finally:
+                await conn.remove_listener("rollup_updated", on_notify)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+from api.platform import router as platform_router
+app.include_router(platform_router)
 
 if __name__ == "__main__":
     import uvicorn

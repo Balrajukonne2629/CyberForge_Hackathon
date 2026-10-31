@@ -21,6 +21,8 @@ from tests.test_rebuild_equality import run_rebuild_equality_test
 from tests.test_golden_parity import run_golden_check
 from tests.integrity_tripwire import verify_integrity_tripwire
 from tests.sync import wait_for_worker
+from tests.test_lost_notification import test_lost_notification
+from tests.test_sse_push import run_sse_push_test
 from config import get_config
 
 def reset_all_worker_state(rollup_url: str):
@@ -71,7 +73,7 @@ def run_all(profile: str):
 
     # 3. Start unified runner worker daemon
     print("Starting background multi-tenant rollup worker...")
-    p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile])
+    p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile, "--mode", "event", "--debounce-ms", "10"])
     time.sleep(1.5)
     wait_for_worker(profile, timeout=15.0)
 
@@ -86,7 +88,7 @@ def run_all(profile: str):
         nonlocal p_worker
         reset_all_worker_state(rollup_url)
         if p_worker is None or p_worker.poll() is not None:
-            p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile])
+            p_worker = subprocess.Popen([sys.executable, "worker/worker.py", "--profile", profile, "--mode", "event", "--debounce-ms", "10"])
             time.sleep(1.5)
 
     # All 11 suites as required
@@ -102,6 +104,8 @@ def run_all(profile: str):
         ("9. Per-Tenant Fail Closed & Stall Isolation", lambda: run_fail_closed_test(profile), False),
         ("10. Rebuild Equality under Load per-tenant", lambda: run_rebuild_equality_test(profile), True),  # Manages its own worker
         ("11. Golden Ground-Truth Parity vs Tenant DBs", lambda: (wait_for_worker(profile) is None and run_golden_check(profile)), False),
+        ("12. Event-Driven Lost-Notification Recovery", lambda: test_lost_notification(), True),
+        ("13. Push SSE Stream Latency", lambda: run_sse_push_test(profile, probes=20), False),
     ]
 
     results = []
@@ -149,9 +153,9 @@ def run_all(profile: str):
     tripwire_ok = verify_integrity_tripwire(profile, fail_fast=False)
     if not tripwire_ok:
         failed = True
-        results.append(("12. Dataset Integrity Tripwire", "FAIL", 0.0))
+        results.append(("14. Dataset Integrity Tripwire", "FAIL", 0.0))
     else:
-        results.append(("12. Dataset Integrity Tripwire", "PASS", 0.0))
+        results.append(("14. Dataset Integrity Tripwire", "PASS", 0.0))
 
     print("\n" + "=" * 70)
     print(f"TEST SUITE SUMMARY ({profile.upper()}):")
@@ -164,7 +168,7 @@ def run_all(profile: str):
         print("FAILURE: One or more test suites failed.")
         sys.exit(1)
     else:
-        print("SUCCESS: All 11 test suites passed with 100% ground-truth parity!")
+        print("SUCCESS: All 13 test suites passed with 100% ground-truth parity!")
         sys.exit(0)
 
 if __name__ == "__main__":

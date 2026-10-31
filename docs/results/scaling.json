@@ -1,0 +1,113 @@
+{
+  "timestamp": "2026-10-31T19:17:58Z",
+  "hardware": {
+    "cpus": 12,
+    "os": "win32",
+    "max_connections_limit": 300,
+    "connection_scaling_note": "Postgres max_connections caps dedicated listeners at 300 per instance; beyond this requires connection multiplexing or external streams (e.g. Kafka)."
+  },
+  "freshness_by_tenants": {
+    "event_mode": {
+      "1": {
+        "p50_ms": 26.8,
+        "p95_ms": 39.0
+      },
+      "10": {
+        "p50_ms": 27.5,
+        "p95_ms": 39.0
+      },
+      "50": {
+        "p50_ms": 26.5,
+        "p95_ms": 29.6
+      },
+      "100": {
+        "p50_ms": 26.6,
+        "p95_ms": 39.3
+      }
+    },
+    "poll_mode": {
+      "1": {
+        "p50_ms": 25.9,
+        "p95_ms": 37.4
+      },
+      "10": {
+        "p50_ms": 29.4,
+        "p95_ms": 38.2
+      },
+      "50": {
+        "p50_ms": 30.7,
+        "p95_ms": 36.8
+      },
+      "100": {
+        "p50_ms": 27.6,
+        "p95_ms": 43.9
+      }
+    }
+  },
+  "worker_cost_per_cycle_at_100_tenants": {
+    "event_mode_idle_p50_ms": 0.0,
+    "event_mode_idle_p95_ms": 0.0,
+    "poll_mode_cycle_avg_ms": 216.1
+  },
+  "idle_cost": {
+    "main_db_commits_per_sec": 30.15,
+    "rollup_db_commits_per_sec": 1.75,
+    "cpu_usage_cores": 0.05
+  },
+  "profile_10m_freshness": {
+    "p50_ms": 40.3,
+    "p95_ms": 99.65,
+    "max_ms": 3228.03
+  },
+  "flood_isolation": {
+    "drain_time_seconds": 0.24,
+    "observer_latency_ms": 77.64
+  },
+  "db_safety_5repeats": {
+    "a": {
+      "p50_ms": 1.63,
+      "p95_ms": 4.21,
+      "p99_ms": 7.32,
+      "mean_ms": 2.0,
+      "writes_per_sec": 496.6,
+      "writes_per_sec_std": 132.2,
+      "server_mean_ms": 0.08
+    },
+    "b": {
+      "p50_ms": 1.54,
+      "p95_ms": 3.09,
+      "p99_ms": 6.1,
+      "mean_ms": 1.72,
+      "writes_per_sec": 575.3,
+      "writes_per_sec_std": 82.2,
+      "server_mean_ms": 0.06
+    },
+    "c": {
+      "p50_ms": 1.39,
+      "p95_ms": 2.93,
+      "p99_ms": 4.33,
+      "mean_ms": 1.54,
+      "writes_per_sec": 642.9,
+      "writes_per_sec_std": 98.6,
+      "server_mean_ms": 0.05
+    },
+    "d2": {
+      "p50_ms": 1.18,
+      "p95_ms": 2.43,
+      "p99_ms": 3.63,
+      "mean_ms": 1.33,
+      "writes_per_sec": 747.3,
+      "writes_per_sec_std": 118.4,
+      "server_mean_ms": 0.04
+    },
+    "d8": {
+      "p50_ms": 1.31,
+      "p95_ms": 2.66,
+      "p99_ms": 4.14,
+      "mean_ms": 1.47,
+      "writes_per_sec": 675.4,
+      "writes_per_sec_std": 76.7,
+      "server_mean_ms": 0.05
+    }
+  }
+}

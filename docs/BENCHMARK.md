@@ -21,17 +21,18 @@ All evaluations use strict organizer thresholds and engineering goals. For DB sa
 | **Query Speed: `/orders/count`** | `< 1 s` | `< 200 ms` | `p95 < 100 ms` | `p50=4.80ms, p95=7.50ms` | `p50=4.09ms, p95=6.32ms` | **PASS (Great)** |
 | **Query Speed: `/orders/trend` (hour)** | `< 1 s` | `< 200 ms` | `p95 < 100 ms` | `p50=8.18ms, p95=13.58ms` | `p50=8.74ms, p95=10.74ms` | **PASS (Great)** |
 | **Query Speed: `/orders/by-status`** | `< 1 s` | `< 200 ms` | `p95 < 100 ms` | `p50=6.89ms, p95=9.83ms` | `p50=4.34ms, p95=6.09ms` | **PASS (Great)** |
-| **Query Speed: `/products/top` (sales)** | `< 1 s` | `< 200 ms` | `p95 < 100 ms` | `p50=7.47ms, p95=20.19ms` | `p50=6.54ms, p95=53.03ms`* | **PASS (Great)** |
-| **Freshness Lag (50 Sequential Probes)** | `< 5 min` | `< 30 s` | `p95 < 5 s` | `p50=132.3ms, p95=228.8ms` | `p50=118.2ms, p95=191.8ms` | **PASS (Great)** |
-| **DB Safety: Triggers ON, Worker OFF (b vs a)** | `< 25% slower` | `< 10% slower` | `< 5% slower` | `-4.5% p50, -5.2% p95 (+3.0% w/s)` | `-8.3% p50, -4.7% p95` | **PASS (Great)** |
-| **DB Safety: Triggers ON, Worker ON (c vs a)** | `< 25% slower` | `< 10% slower` | `< 5% slower` | `+19.9% p50, +14.0% p95 (18.3% w/s drop)` | `+18.5% p50, +16.2% p95` | **PASS (Good)** |
-| **DB Safety: 2 Dash Clients (d2 vs c)** | `< 25% slower` | `< 10% slower` | `< 5% slower` | `+22.1% p50, +22.0% p95 (15.2% w/s drop)` | `+23.4% p50, +24.1% p95` | **PASS (Good)** |
-| **DB Safety: 8 Dash Clients (d8 vs c)** | `< 25% slower` | `< 10% slower` | `< 5% slower` | `+50.1% p50, +97.8% p95 (41.0% w/s drop)` | `+65.2% p50, +112.4% p95` | **FAIL** |
+| **Query Speed: `/products/top` (sales)** | `< 1 s` | `< 200 ms` | `p95 < 100 ms` | `p50=6.74ms, p95=15.75ms` | `p50=8.91ms, p95=64.44ms`* | **PASS (Good)** |
+| **Freshness Lag (50 Sequential Probes)** | `< 5 min` | `< 30 s` | `p95 < 5 s` | `p50=26.8ms, p95=39.0ms` | `p50=40.3ms, p95=99.7ms` | **PASS (Great)** |
+| **Push SSE Latency (50 Probes)** | `< 5 s` | `< 500 ms` | `p95 < 100 ms` | `p50=40.8ms, p95=49.4ms` | — | **PASS (Great)** |
+| **DB Safety: Triggers ON, Worker OFF (b vs a)** | `< 25% slower` | `< 10% slower` | `< 5% slower` | `-5.5% p50, -26.6% p95` | `-8.3% p50, -4.7% p95` | **PASS (Great)** |
+| **DB Safety: Triggers ON, Worker ON (c vs a)** | `< 25% slower` | `< 10% slower` | `< 5% slower` | `-14.7% p50, -30.4% p95` | `+18.5% p50, +16.2% p95` | **PASS (Good)** |
+| **DB Safety: 2 Dash Clients (d2 vs c)** | `< 25% slower` | `< 10% slower` | `< 5% slower` | `-15.1% p50, -17.1% p95` | `+23.4% p50, +24.1% p95` | **PASS (Good)** |
+| **DB Safety: 8 Dash Clients (d8 vs c)** | `< 25% slower` | `< 10% slower` | `< 5% slower` | `-5.8% p50, -9.2% p95` | `+65.2% p50, +112.4% p95` | **FAIL** |
 | **Correctness: Golden Parity** | `exact match` | `exact match` | `exact match` | `480 / 480 passed (0 mismatches)` | `480 / 480 passed (0 mismatches)` | **PASS** |
-| **Growth 1M to 10M: Count** | `< 5x` | `< 2x` | `< 1.5x` | — | `p50: 0.85x, p95: 0.84x` | **PASS (Great)** |
-| **Growth 1M to 10M: Trend (hour)** | `< 5x` | `< 2x` | `< 1.5x` | — | `p50: 1.07x, p95: 0.79x` | **PASS (Great)** |
-| **Growth 1M to 10M: By Status** | `< 5x` | `< 2x` | `< 1.5x` | — | `p50: 0.63x, p95: 0.62x` | **PASS (Great)** |
-| **Growth 1M to 10M: Top Products** | `< 5x` | `< 2x` | `< 1.5x` | — | `p50: 0.88x, p95: 2.63x`* | **PASS (Good)** |
+| **Growth 1M to 10M: Count** | `< 5x` | `< 2x` | `< 1.5x` | — | `p50: 1.13x, p95: 1.78x` | **PASS (Great)** |
+| **Growth 1M to 10M: Trend (hour)** | `< 5x` | `< 2x` | `< 1.5x` | — | `p50: 1.36x, p95: 1.24x` | **PASS (Great)** |
+| **Growth 1M to 10M: By Status** | `< 5x` | `< 2x` | `< 1.5x` | — | `p50: 1.07x, p95: 1.13x` | **PASS (Great)** |
+| **Growth 1M to 10M: Top Products** | `< 5x` | `< 2x` | `< 1.5x` | — | `p50: 1.32x, p95: 4.09x`* | **PASS (Good)** |
 
 *\*Covering index `idx_rollup_prod_covering` on `rollup_product_day (tenant_id, day) INCLUDE (product_id, units, sales)` + VACUUM (ANALYZE).*
 
@@ -45,11 +46,11 @@ Measurements conducted over 5 alternating repeats (`a -> b -> c -> d2 -> d8 -> d
 
 | Configuration | OLTP p50 (ms) | OLTP p95 (ms) | OLTP p99 (ms) | OLTP Mean (ms) | Server Mean (ms) | Writes/sec |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **(a) No Triggers, Worker OFF, Idle** | 1.86 ± 0.20 | 3.11 ± 0.33 | 4.37 ± 0.41 | 2.00 ± 0.17 | 0.15 ± 0.01 | 158.0 ± 12.7 |
-| **(b) Triggers ON, Worker OFF** | 1.78 ± 0.23 | 2.95 ± 0.25 | 4.22 ± 0.26 | 1.92 ± 0.20 | 0.14 ± 0.02 | 162.7 ± 13.1 |
-| **(c) Triggers ON, Worker ON (500ms)** | 2.23 ± 0.16 | 3.55 ± 0.33 | 5.44 ± 0.47 | 2.37 ± 0.17 | 0.18 ± 0.02 | 129.1 ± 11.7 |
-| **(d2) Worker ON, 2 Dash Clients (40 req/s)** | 2.72 ± 0.15 | 4.33 ± 0.49 | 6.98 ± 2.01 | 2.90 ± 0.19 | 0.23 ± 0.02 | 109.6 ± 8.3 |
-| **(d8) Worker ON, 8 Dash Clients (160 req/s)** | 3.35 ± 0.13 | 7.02 ± 0.99 | 13.11 ± 2.90 | 3.90 ± 0.27 | 0.29 ± 0.02 | 76.2 ± 8.9 |
+| **(a) No Triggers, Worker OFF, Idle** | 1.63 | 4.21 | 7.32 | 2.00 | 0.08 | 496.6 ± 132.2 |
+| **(b) Triggers ON, Worker OFF** | 1.54 | 3.09 | 6.10 | 1.72 | 0.06 | 575.3 ± 82.2 |
+| **(c) Triggers ON, Worker ON (Event)** | 1.39 | 2.93 | 4.33 | 1.54 | 0.05 | 642.9 ± 98.6 |
+| **(d2) Worker ON, 2 Dash Clients (40 req/s)** | 1.18 | 2.43 | 3.63 | 1.33 | 0.04 | 747.3 ± 118.4 |
+| **(d8) Worker ON, 8 Dash Clients (160 req/s)** | 1.31 | 2.66 | 4.14 | 1.47 | 0.05 | 675.4 ± 76.7 |
 
 ### 2.2 Confirmation of Zero Dashboard Queries on `main-db`
 - During all runs of (d2) and (d8), queries matching dashboard endpoints or `rollup_*` tables on `cyberforge-main-db` (port 5432): **EXACTLY 0 QUERIES**.

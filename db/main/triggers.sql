@@ -23,6 +23,8 @@ CREATE INDEX IF NOT EXISTS outbox_xid_id_idx ON outbox (xid, id);
 
 CREATE OR REPLACE FUNCTION trg_orders_insert_stmt()
 RETURNS trigger AS $$
+DECLARE
+    tid int;
 BEGIN
     INSERT INTO outbox (kind, tenant_id, bucket_ts, status, delta_count, delta_amount)
     SELECT
@@ -33,12 +35,21 @@ BEGIN
         1,
         CASE WHEN n.status NOT IN ('canceled', 'unavailable') THEN n.total ELSE 0.00 END
     FROM new_table n;
+
+    IF FOUND THEN
+        SELECT tenant_id INTO tid FROM new_table LIMIT 1;
+        IF tid IS NOT NULL THEN
+            PERFORM pg_notify('outbox', tid::text);
+        END IF;
+    END IF;
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION trg_orders_delete_stmt()
 RETURNS trigger AS $$
+DECLARE
+    tid int;
 BEGIN
     INSERT INTO outbox (kind, tenant_id, bucket_ts, status, delta_count, delta_amount)
     SELECT
@@ -49,13 +60,38 @@ BEGIN
         -1,
         CASE WHEN o.status NOT IN ('canceled', 'unavailable') THEN -o.total ELSE 0.00 END
     FROM old_table o;
+
+    IF FOUND THEN
+        SELECT tenant_id INTO tid FROM old_table LIMIT 1;
+        IF tid IS NOT NULL THEN
+            PERFORM pg_notify('outbox', tid::text);
+        END IF;
+    END IF;
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION trg_orders_update_stmt()
 RETURNS trigger AS $$
+DECLARE
+    tid int;
+    has_changes boolean;
+    rows_emitted boolean := false;
 BEGIN
+    -- EARLY FILTER: check if any updated order altered a rollup-relevant column (status, created_at, total)
+    SELECT EXISTS (
+        SELECT 1
+        FROM old_table o
+        JOIN new_table n ON o.order_id = n.order_id
+        WHERE o.status IS DISTINCT FROM n.status
+           OR o.created_at IS DISTINCT FROM n.created_at
+           OR o.total IS DISTINCT FROM n.total
+    ) INTO has_changes;
+
+    IF NOT has_changes THEN
+        RETURN NULL;
+    END IF;
+
     -- 1. If bucket moved (status or hour changed), emit -1 for old bucket and +1 for new bucket
     INSERT INTO outbox (kind, tenant_id, bucket_ts, status, delta_count, delta_amount)
     SELECT
@@ -69,6 +105,7 @@ BEGIN
     JOIN new_table n ON o.order_id = n.order_id
     WHERE o.status IS DISTINCT FROM n.status
        OR date_trunc('hour', o.created_at) IS DISTINCT FROM date_trunc('hour', n.created_at);
+    IF FOUND THEN rows_emitted := true; END IF;
 
     INSERT INTO outbox (kind, tenant_id, bucket_ts, status, delta_count, delta_amount)
     SELECT
@@ -82,6 +119,7 @@ BEGIN
     JOIN new_table n ON o.order_id = n.order_id
     WHERE o.status IS DISTINCT FROM n.status
        OR date_trunc('hour', o.created_at) IS DISTINCT FROM date_trunc('hour', n.created_at);
+    IF FOUND THEN rows_emitted := true; END IF;
 
     -- 2. If bucket remained identical, but total changed: fold -1/+1 pair into single net delta row
     INSERT INTO outbox (kind, tenant_id, bucket_ts, status, delta_count, delta_amount)
@@ -97,6 +135,7 @@ BEGIN
     WHERE o.status IS NOT DISTINCT FROM n.status
       AND date_trunc('hour', o.created_at) IS NOT DISTINCT FROM date_trunc('hour', n.created_at)
       AND o.total IS DISTINCT FROM n.total;
+    IF FOUND THEN rows_emitted := true; END IF;
 
     -- FAN OUT: If order changed from counted -> excluded (e.g. canceled), subtract all its items
     INSERT INTO outbox (kind, tenant_id, bucket_ts, product_id, category, delta_count, delta_amount)
@@ -114,6 +153,7 @@ BEGIN
     JOIN products p ON p.product_id = i.product_id
     WHERE o.status NOT IN ('canceled', 'unavailable')
       AND n.status IN ('canceled', 'unavailable');
+    IF FOUND THEN rows_emitted := true; END IF;
 
     -- FAN OUT: If order changed from excluded -> counted, add all its items
     INSERT INTO outbox (kind, tenant_id, bucket_ts, product_id, category, delta_count, delta_amount)
@@ -131,6 +171,7 @@ BEGIN
     JOIN products p ON p.product_id = i.product_id
     WHERE o.status IN ('canceled', 'unavailable')
       AND n.status NOT IN ('canceled', 'unavailable');
+    IF FOUND THEN rows_emitted := true; END IF;
 
     -- If day changed on a counted order, shift items to the new day
     INSERT INTO outbox (kind, tenant_id, bucket_ts, product_id, category, delta_count, delta_amount)
@@ -149,6 +190,7 @@ BEGIN
     WHERE o.status NOT IN ('canceled', 'unavailable')
       AND n.status NOT IN ('canceled', 'unavailable')
       AND date_trunc('day', o.created_at) IS DISTINCT FROM date_trunc('day', n.created_at);
+    IF FOUND THEN rows_emitted := true; END IF;
 
     INSERT INTO outbox (kind, tenant_id, bucket_ts, product_id, category, delta_count, delta_amount)
     SELECT
@@ -166,6 +208,14 @@ BEGIN
     WHERE o.status NOT IN ('canceled', 'unavailable')
       AND n.status NOT IN ('canceled', 'unavailable')
       AND date_trunc('day', o.created_at) IS DISTINCT FROM date_trunc('day', n.created_at);
+    IF FOUND THEN rows_emitted := true; END IF;
+
+    IF rows_emitted THEN
+        SELECT tenant_id INTO tid FROM new_table LIMIT 1;
+        IF tid IS NOT NULL THEN
+            PERFORM pg_notify('outbox', tid::text);
+        END IF;
+    END IF;
 
     RETURN NULL;
 END;
@@ -177,6 +227,8 @@ $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION trg_order_items_insert_stmt()
 RETURNS trigger AS $$
+DECLARE
+    tid int;
 BEGIN
     -- Only emit item fact rows if parent order is counted
     INSERT INTO outbox (kind, tenant_id, bucket_ts, product_id, category, delta_count, delta_amount)
@@ -192,12 +244,21 @@ BEGIN
     JOIN orders o ON o.order_id = n.order_id
     JOIN products p ON p.product_id = n.product_id
     WHERE o.status NOT IN ('canceled', 'unavailable');
+
+    IF FOUND THEN
+        SELECT tenant_id INTO tid FROM new_table LIMIT 1;
+        IF tid IS NOT NULL THEN
+            PERFORM pg_notify('outbox', tid::text);
+        END IF;
+    END IF;
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION trg_order_items_delete_stmt()
 RETURNS trigger AS $$
+DECLARE
+    tid int;
 BEGIN
     INSERT INTO outbox (kind, tenant_id, bucket_ts, product_id, category, delta_count, delta_amount)
     SELECT
@@ -212,6 +273,99 @@ BEGIN
     JOIN orders ord ON ord.order_id = o.order_id
     JOIN products p ON p.product_id = o.product_id
     WHERE ord.status NOT IN ('canceled', 'unavailable');
+
+    IF FOUND THEN
+        SELECT tenant_id INTO tid FROM old_table LIMIT 1;
+        IF tid IS NOT NULL THEN
+            PERFORM pg_notify('outbox', tid::text);
+        END IF;
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION trg_order_items_update_stmt()
+RETURNS trigger AS $$
+DECLARE
+    tid int;
+    has_changes boolean;
+    rows_emitted boolean := false;
+BEGIN
+    -- EARLY FILTER: check if any updated item changed product_id, qty, or price
+    SELECT EXISTS (
+        SELECT 1
+        FROM old_table o
+        JOIN new_table n ON o.item_id = n.item_id
+        WHERE o.product_id IS DISTINCT FROM n.product_id
+           OR o.qty IS DISTINCT FROM n.qty
+           OR o.price IS DISTINCT FROM n.price
+    ) INTO has_changes;
+
+    IF NOT has_changes THEN
+        RETURN NULL;
+    END IF;
+
+    -- If product changed: remove old item, add new item
+    INSERT INTO outbox (kind, tenant_id, bucket_ts, product_id, category, delta_count, delta_amount)
+    SELECT
+        'item',
+        o.tenant_id,
+        date_trunc('day', ord.created_at),
+        o.product_id,
+        p.category,
+        -o.qty,
+        -(o.qty * o.price)
+    FROM old_table o
+    JOIN new_table n ON o.item_id = n.item_id
+    JOIN orders ord ON ord.order_id = o.order_id
+    JOIN products p ON p.product_id = o.product_id
+    WHERE ord.status NOT IN ('canceled', 'unavailable')
+      AND o.product_id IS DISTINCT FROM n.product_id;
+    IF FOUND THEN rows_emitted := true; END IF;
+
+    INSERT INTO outbox (kind, tenant_id, bucket_ts, product_id, category, delta_count, delta_amount)
+    SELECT
+        'item',
+        n.tenant_id,
+        date_trunc('day', ord.created_at),
+        n.product_id,
+        p.category,
+        n.qty,
+        (n.qty * n.price)
+    FROM old_table o
+    JOIN new_table n ON o.item_id = n.item_id
+    JOIN orders ord ON ord.order_id = n.order_id
+    JOIN products p ON p.product_id = n.product_id
+    WHERE ord.status NOT IN ('canceled', 'unavailable')
+      AND o.product_id IS DISTINCT FROM n.product_id;
+    IF FOUND THEN rows_emitted := true; END IF;
+
+    -- If product is same, but qty or price changed: net delta
+    INSERT INTO outbox (kind, tenant_id, bucket_ts, product_id, category, delta_count, delta_amount)
+    SELECT
+        'item',
+        n.tenant_id,
+        date_trunc('day', ord.created_at),
+        n.product_id,
+        p.category,
+        (n.qty - o.qty),
+        ((n.qty * n.price) - (o.qty * o.price))
+    FROM old_table o
+    JOIN new_table n ON o.item_id = n.item_id
+    JOIN orders ord ON ord.order_id = n.order_id
+    JOIN products p ON p.product_id = n.product_id
+    WHERE ord.status NOT IN ('canceled', 'unavailable')
+      AND o.product_id IS NOT DISTINCT FROM n.product_id
+      AND (o.qty IS DISTINCT FROM n.qty OR o.price IS DISTINCT FROM n.price);
+    IF FOUND THEN rows_emitted := true; END IF;
+
+    IF rows_emitted THEN
+        SELECT tenant_id INTO tid FROM new_table LIMIT 1;
+        IF tid IS NOT NULL THEN
+            PERFORM pg_notify('outbox', tid::text);
+        END IF;
+    END IF;
+
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
@@ -249,3 +403,9 @@ CREATE TRIGGER trg_order_items_delete
 AFTER DELETE ON order_items
 REFERENCING OLD TABLE AS old_table
 FOR EACH STATEMENT EXECUTE FUNCTION trg_order_items_delete_stmt();
+
+DROP TRIGGER IF EXISTS trg_order_items_update ON order_items;
+CREATE TRIGGER trg_order_items_update
+AFTER UPDATE ON order_items
+REFERENCING OLD TABLE AS old_table NEW TABLE AS new_table
+FOR EACH STATEMENT EXECUTE FUNCTION trg_order_items_update_stmt();
