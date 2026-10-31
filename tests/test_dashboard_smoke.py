@@ -322,8 +322,102 @@ def run_playwright_screen_verification():
 
             context.close()
 
+        # Run Task 8 Live-Action Verification on Store 2
+        run_live_action_store_2_verification(browser)
+
         browser.close()
     print(">>> Playwright Verification & Screenshots PASSED 100% <<<")
+
+def run_live_action_store_2_verification(browser):
+    print("\n--- Running Task 8 Playwright Live-Action Verification (Store 2) ---")
+    context = browser.new_context(viewport={"width": 1920, "height": 1080})
+    page = context.new_page()
+    page.on("dialog", lambda dialog: dialog.accept())
+
+    page.goto("http://127.0.0.1:8000/ui")
+    page.wait_for_selector("#viewTenant.active")
+    page.wait_for_timeout(1000)
+
+    # 1. Select Store 2
+    page.select_option("#tenantSelect", "2")
+    page.wait_for_timeout(1000)
+    assert page.locator("#currentStoreName").inner_text() == "Store 2"
+    print("[PASS] 8.1 Store 2 selected in dropdown")
+
+    # Switch to Live range so before/after actions measure on the live window
+    page.click("#viewTenant .range-selector button[data-range='live']")
+    page.wait_for_timeout(1000)
+
+    # 2. Read initial Orders and Sales
+    init_orders = int(page.locator("#tenantOrdersCount").inner_text().split()[0].replace(",", ""))
+    init_sales = float(page.locator("#tenantSalesTotal").inner_text().split()[0].replace("$", "").replace(",", ""))
+    print(f"[PASS] 8.2 Initial Store 2 tiles read: Orders={init_orders}, Sales=${init_sales:.2f}")
+
+    # 3. Click New order
+    page.click("#btnTenantNewOrder")
+    page.wait_for_timeout(1200)
+
+    # Assert What Just Happened panel appears
+    page.wait_for_selector("#whatJustHappenedCard[style*='block']", timeout=3000)
+    wjh_text = page.locator("#whatHappenedText").inner_text()
+    assert "You clicked New order" in wjh_text and "Store 2" in wjh_text
+    print(f"[PASS] 8.3 'What just happened' panel appeared: '{wjh_text}'")
+    page.screenshot(path=os.path.join(SCREENS_DIR, "screen_15_what_just_happened_desktop.png"))
+
+    # Assert Orders +1 and Sales +total within 2 s
+    new_orders = int(page.locator("#tenantOrdersCount").inner_text().split()[0].replace(",", ""))
+    new_sales = float(page.locator("#tenantSalesTotal").inner_text().split()[0].replace("$", "").replace(",", ""))
+    assert new_orders == init_orders + 1, f"Expected orders {init_orders + 1}, got {new_orders}"
+    assert new_sales > init_sales, f"Expected sales > {init_sales}, got {new_sales}"
+    print(f"[PASS] 8.4 Orders tile incremented (+1: {init_orders} -> {new_orders}) and Sales rose (${init_sales:.2f} -> ${new_sales:.2f}) within 2 s")
+    page.screenshot(path=os.path.join(SCREENS_DIR, "screen_13_store_after_new_order_desktop.png"))
+
+    # Assert feed line with 'IST' appears
+    feed_all = page.locator("#tenantFeedList").inner_text()
+    assert "IST" in feed_all and "New order" in feed_all and "Store 2" in feed_all
+    print(f"[PASS] 8.5 Live Activity Feed contains entry with IST and Store 2")
+
+    # Assert no visible 'UTC' outside the How It Works note
+    tenant_text = page.locator("#viewTenant").inner_text()
+    assert "UTC" not in tenant_text, f"Found visible UTC in Store view: {tenant_text}"
+    print("[PASS] 8.6 Zero visible 'UTC' text in Store view outside How It Works note")
+
+    # Read latency badge from DOM (Task 10)
+    badge_el = page.locator("#orderLatencyBadge")
+    badge_text = badge_el.inner_text() if badge_el.is_visible() else "n/a"
+    safe_badge = badge_text.replace('\u2192', '->')
+    print(f"[PASS] 8.7 Latency badge read from DOM: '{safe_badge}'")
+
+    # 4. Start flood 50
+    page.select_option("#tenantFloodCountSelect", "50")
+    page.click("#btnTenantFlood")
+
+    # Wait for flood completion (progress reaches 50/50)
+    page.wait_for_selector("#descFloodStatus:has-text('Flood done: 50 orders')", timeout=20000)
+    prog_text = page.locator("#floodProgressText").inner_text()
+    assert "50 / 50 sent" in prog_text
+    print(f"[PASS] 8.8 Flood progress reached 50/50: '{prog_text}'")
+
+    page.wait_for_timeout(1000)
+    flood_orders = int(page.locator("#tenantOrdersCount").inner_text().split()[0].replace(",", ""))
+    assert flood_orders >= new_orders + 50, f"Expected >= {new_orders + 50}, got {flood_orders}"
+    print(f"[PASS] 8.9 Orders tile rose by 50 flood orders: {new_orders} -> {flood_orders}")
+    page.screenshot(path=os.path.join(SCREENS_DIR, "screen_14_store_after_flood_50_desktop.png"))
+
+    # 5. Capture Scorecard tab screenshot with FAIL for Top-N Products and DB safety
+    page.click("#navAdminBtn")
+    page.click(".sub-nav button[data-sub='scorecard']")
+    page.wait_for_selector("#adminSub-scorecard[style*='block']")
+    page.wait_for_timeout(600)
+    page.screenshot(path=os.path.join(SCREENS_DIR, "screen_12_scorecard_desktop.png"))
+    print("[PASS] 8.10 Scorecard screenshot captured: screen_12_scorecard_desktop.png")
+
+    # Reset demo data to leave clean state
+    page.click("#navTenantBtn")
+    page.click("#btnTenantResetDemo")
+    page.wait_for_timeout(500)
+
+    context.close()
 
 if __name__ == "__main__":
     os.environ["DEMO_MODE"] = "1"

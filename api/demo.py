@@ -17,6 +17,15 @@ router = APIRouter()
 # Global background flood tracking
 _active_floods: Dict[int, asyncio.Task] = {}
 _flood_stop_event = asyncio.Event()
+_active_flood_status: Dict = {
+    "running": False,
+    "tenant_id": 1,
+    "sent": 0,
+    "total": 0,
+    "elapsed_seconds": 0.0,
+    "done": False,
+    "orders_per_sec": 0.0
+}
 
 def _check_demo_access(x_admin_key: Optional[str]):
     if os.getenv("DEMO_MODE") != "1":
@@ -163,46 +172,75 @@ async def _flood_worker(tenant_id: int, n: int, stop_ev: asyncio.Event):
     profile = os.getenv("PROFILE", "1m")
     db_url = get_tenant_db_url(tenant_id, profile)
     conn = await asyncpg.connect(db_url)
+    global _active_flood_status
+    _active_flood_status = {
+        "running": True,
+        "tenant_id": tenant_id,
+        "sent": 0,
+        "total": n,
+        "elapsed_seconds": 0.0,
+        "done": False,
+        "orders_per_sec": 0.0
+    }
     try:
         prod_rows = await conn.fetch("SELECT product_id, price FROM products LIMIT 5")
         if not prod_rows:
+            _active_flood_status["running"] = False
+            _active_flood_status["done"] = True
             return
         
         start_time = time.time()
-        while not stop_ev.is_set() and (time.time() - start_time < 60.0):
-            # Insert a batch of n orders per second, broken into sub-seconds
-            step_orders = max(1, n // 5)
-            for _ in range(step_orders):
-                if stop_ev.is_set():
-                    break
-                max_oid = await conn.fetchval("""
-                    SELECT COALESCE(MAX(order_id), 900000000)
-                    FROM orders WHERE order_id >= 900000000
-                """)
-                next_oid = max_oid + 1
-                max_iid = await conn.fetchval("""
-                    SELECT COALESCE(MAX(item_id), 900000000)
-                    FROM order_items WHERE item_id >= 900000000
-                """)
-                p = random.choice(prod_rows)
-                qty = 1
-                price = float(p["price"])
-                total = qty * price
-                now_utc = datetime.datetime.now(datetime.timezone.utc)
-                async with conn.transaction():
+        sent = 0
+        while not stop_ev.is_set() and sent < n and (time.time() - start_time < 60.0):
+            batch_size = min(10, n - sent)
+            max_oid = await conn.fetchval("""
+                SELECT COALESCE(MAX(order_id), 900000000)
+                FROM orders WHERE order_id >= 900000000
+            """)
+            max_iid = await conn.fetchval("""
+                SELECT COALESCE(MAX(item_id), 900000000)
+                FROM order_items WHERE item_id >= 900000000
+            """)
+
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            async with conn.transaction():
+                for b in range(batch_size):
+                    oid = max_oid + 1 + b
+                    iid = max_iid + 1 + b
+                    p = random.choice(prod_rows)
+                    qty = 1
+                    price = float(p["price"])
+                    total = qty * price
                     await conn.execute("""
                         INSERT INTO orders (order_id, tenant_id, customer_id, status, total, created_at, updated_at)
                         VALUES ($1, $2, 1, 'delivered', $3, $4, $4)
-                    """, next_oid, tenant_id, total, now_utc.replace(tzinfo=None))
+                    """, oid, tenant_id, total, now_utc.replace(tzinfo=None))
                     await conn.execute("""
                         INSERT INTO order_items (item_id, order_id, tenant_id, product_id, qty, price)
                         VALUES ($1, $2, $3, $4, $5, $6)
-                    """, max_iid + 1, next_oid, tenant_id, p["product_id"], qty, price)
-            await asyncio.sleep(0.2)
+                    """, iid, oid, tenant_id, p["product_id"], qty, price)
+            sent += batch_size
+            _active_flood_status["sent"] = sent
+            _active_flood_status["elapsed_seconds"] = round(time.time() - start_time, 2)
+            await asyncio.sleep(0.05)
+
+        elapsed = max(0.01, time.time() - start_time)
+        _active_flood_status["running"] = False
+        _active_flood_status["done"] = True
+        _active_flood_status["elapsed_seconds"] = round(elapsed, 2)
+        _active_flood_status["orders_per_sec"] = round(sent / elapsed, 1)
     except Exception:
-        pass
+        _active_flood_status["running"] = False
+        _active_flood_status["done"] = True
     finally:
         await conn.close()
+
+@router.get("/demo/flood/status")
+async def demo_flood_status(
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")
+):
+    _check_demo_access(x_admin_key)
+    return _active_flood_status
 
 @router.post("/demo/flood")
 async def demo_flood(
@@ -233,12 +271,15 @@ async def demo_flood_stop(
     x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")
 ):
     _check_demo_access(x_admin_key)
-    global _flood_stop_event
+    global _flood_stop_event, _active_flood_status
     _flood_stop_event.set()
+    _active_flood_status["running"] = False
+    _active_flood_status["done"] = True
     for task in _active_floods.values():
         if not task.done():
             task.cancel()
     _active_floods.clear()
+    return {"status": "flood_stopped", "sent": _active_flood_status.get("sent", 0)}
     return {"status": "flood_stopped"}
 
 @router.get("/demo/naive/{tenant_id}")
@@ -351,19 +392,17 @@ async def demo_naive(
             r_cfg = cfg.get("databases", {}).get("rollup", {})
             r_url = f"postgresql://{r_cfg.get('user','postgres')}:{r_cfg.get('password','postgres')}@{r_cfg.get('host','127.0.0.1')}:{r_cfg.get('port',5433)}/{r_cfg.get('dbname','rollup_1m')}"
             rollup_conn = await asyncpg.connect(r_url)
-            f_day = f_dt.date()
-            t_day = t_dt.date()
             r_sql = """
                 SELECT product_id, category, SUM(units)::bigint as units, SUM(sales)::numeric(14,2) as sales
                 FROM rollup_product_day
-                WHERE tenant_id = $1 AND day >= $2 AND day <= $3
+                WHERE tenant_id = $1 AND "day" >= $2 AND "day" <= $3
                 GROUP BY product_id, category
                 ORDER BY sales DESC
                 LIMIT 10
             """
             for _ in range(5):
                 rt0 = time.perf_counter()
-                await rollup_conn.fetch(r_sql, actual_tid, f_day, t_day)
+                await rollup_conn.fetch(r_sql, actual_tid, f_dt, t_dt)
                 rt1 = time.perf_counter()
                 rollup_times.append((rt1 - rt0) * 1000)
         except Exception:

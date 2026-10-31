@@ -216,6 +216,12 @@ async def ui_demo_flood(req: DemoFloodReq):
     adm_key = _get_admin_key()
     return await api.demo.demo_flood(DemoFloodRequest(tenant_id=req.tenant_id, n=req.n), x_admin_key=adm_key)
 
+@router.get("/demo/flood/status")
+async def ui_demo_flood_status():
+    import api.demo
+    adm_key = _get_admin_key()
+    return await api.demo.demo_flood_status(x_admin_key=adm_key)
+
 @router.post("/demo/flood/stop")
 async def ui_demo_flood_stop():
     import api.demo

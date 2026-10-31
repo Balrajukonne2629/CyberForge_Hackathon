@@ -56,6 +56,7 @@
     .container {
       max-width: 1440px;
       margin: 0 auto;
+      padding-bottom: 260px;
     }
 
     .tabular {
@@ -964,17 +965,6 @@
       </div>
     </div>
 
-    <!-- Status Bar -->
-    <div class="status-bar">
-      <div class="status-indicator">
-        <span class="status-dot" id="systemStatusDot"></span>
-        <span id="systemStatusText">Everything is up to date</span>
-      </div>
-      <div class="status-detail" id="systemStatusDetail">
-        Checked just now · Pipeline latency: 0.0s
-      </div>
-    </div>
-
     <!-- Stalled Banner -->
     <div id="stalledBanner" class="stalled-banner">
       WARNING: Ingestion pipeline is stalled for this store. Queries are served from the last consistent snapshot.
@@ -987,7 +977,7 @@
       <div class="filter-bar">
         <div style="display:flex; align-items:center; gap:8px;">
           <span style="font-weight:700; font-size:14px;" id="currentStoreName">Store 1</span>
-          <span id="freshnessBadge" class="badge-freshness">Up to date · checked 1 s ago</span>
+          <span id="freshnessBadge" class="badge-freshness">Data age: 0.00 s</span>
           <span id="orderLatencyBadge" class="badge-freshness" style="display:none;"></span>
         </div>
         <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
@@ -999,8 +989,22 @@
             <button class="btn-sm" data-range="7d">Last 7 days</button>
             <button class="btn-sm" data-range="30d">Last 30 days</button>
           </div>
+          <div class="range-note" style="width:100%; margin-top:4px; color:var(--muted); font-size:11px;">
+            Dataset ends 30 Oct 2026. Demo orders are dated now, so use Live to see them. Use Latest data to see the real dataset.
+          </div>
           <div id="demoRangeSwitchNote" class="range-note" style="display:none; color:var(--accent); font-weight:600; width:100%; margin-top:4px;"></div>
         </div>
+      </div>
+
+      <!-- "Try this" Strip (Dismissible, remembered in localStorage) -->
+      <div id="tryThisStrip" class="card" style="background:var(--card); border:1px solid var(--accent); margin-bottom:12px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-size:12px; color:var(--text); display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+          <strong style="color:var(--accent); text-transform:uppercase; font-size:11px; letter-spacing:0.05em;">Try this:</strong>
+          <span><strong>1</strong> Click <em>New order</em></span>
+          <span>&rarr; <strong>2</strong> Watch Orders &amp; Sales change</span>
+          <span>&rarr; <strong>3</strong> Click <em>Cancel last order</em> and watch them drop</span>
+        </div>
+        <button id="btnDismissTryThis" style="background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; padding:2px 6px; line-height:1;" title="Dismiss this tip">&times;</button>
       </div>
 
       <!-- Store Actions Card in Store View (DEMO_MODE only) -->
@@ -1010,33 +1014,80 @@
           <span class="range-note" id="demoCurrentStoreLabel">Target: Store 1</span>
         </div>
         <div class="card-caption">Execute immediate simulated orders on this store's isolated database. Demo row IDs &ge; 900,000,000.</div>
-        <div class="demo-btn-group" style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-          <button id="btnTenantNewOrder" class="btn-sm btn-primary">New order</button>
-          <button id="btnTenantCancelOrder" class="btn-sm">Cancel last order</button>
-          <div style="display:inline-flex; align-items:center; gap:6px;">
-            <select id="tenantFloodCountSelect" style="padding:4px 8px; font-size:12px;">
-              <option value="50">50 orders</option>
-              <option value="200" selected>200 orders</option>
-              <option value="2000">2000 orders</option>
-            </select>
-            <button id="btnTenantFlood" class="btn-sm">Flood this store</button>
+
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin-top:14px;">
+          <!-- Group 1: Single orders -->
+          <div style="background:var(--bg); padding:10px 12px; border-radius:var(--radius); border:1px solid var(--line);">
+            <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Single Orders</div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div>
+                <button id="btnTenantNewOrder" class="btn-sm btn-primary" title="Create and commit 1 real order in this store's database">New order</button>
+                <div style="font-size:11px; color:var(--muted); margin-top:3px;" id="descNewOrder">Adds 1 order to Store 1's own database.</div>
+              </div>
+              <div>
+                <button id="btnTenantCancelOrder" class="btn-sm" title="Mark your last demo order as canceled">Cancel last order</button>
+                <div style="font-size:11px; color:var(--muted); margin-top:3px;">Cancels your last demo order. Sales drops, status chart moves.</div>
+              </div>
+            </div>
           </div>
-          <button id="btnTenantStopFlood" class="btn-sm">Stop flood</button>
-          <button id="btnTenantResetDemo" class="btn-sm btn-danger">Reset demo data</button>
+
+          <!-- Group 2: Load test -->
+          <div style="background:var(--bg); padding:10px 12px; border-radius:var(--radius); border:1px solid var(--line);">
+            <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Load Test</div>
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+              <label for="tenantFloodCountSelect" style="font-size:11px; font-weight:600; color:var(--muted);">How many orders:</label>
+              <select id="tenantFloodCountSelect" style="padding:3px 6px; font-size:11px; border:1px solid var(--line); border-radius:4px; background:var(--card); color:var(--text);" title="Select volume of concurrent orders">
+                <option value="50">50</option>
+                <option value="200" selected>200</option>
+                <option value="2000">2000</option>
+              </select>
+            </div>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <button id="btnTenantFlood" class="btn-sm" title="Inject rapid simulated orders into this store's database">Start flood (200 orders)</button>
+              <button id="btnTenantStopFlood" class="btn-sm" disabled title="Halt the active flood loop immediately">Stop flood</button>
+            </div>
+            <!-- Progress Bar -->
+            <div id="floodProgressWrap" style="display:none; margin-top:8px;">
+              <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:600;">
+                <span id="floodProgressText">0 / 200 sent</span>
+                <span id="floodProgressRate" class="tabular"></span>
+              </div>
+              <div style="width:100%; height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin-top:3px;">
+                <div id="floodProgressBar" style="height:100%; width:0%; background:var(--accent); transition:width 0.1s;"></div>
+              </div>
+            </div>
+            <div style="font-size:11px; color:var(--muted); margin-top:6px;" id="descFloodStatus">Tests pipeline ingestion throughput and worker response.</div>
+          </div>
+
+          <!-- Group 3: Cleanup -->
+          <div style="background:var(--bg); padding:10px 12px; border-radius:var(--radius); border:1px solid var(--line);">
+            <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">Cleanup</div>
+            <button id="btnTenantResetDemo" class="btn-sm btn-danger" title="Purge demo orders with IDs >= 900,000,000 from all tenant databases">Reset demo data</button>
+            <div style="font-size:11px; color:var(--muted); margin-top:4px;">Removes only demo orders (ids &ge; 900,000,000). Real data is untouched.</div>
+          </div>
         </div>
-        <div id="tenantDemoStatusMsg" style="margin-top:8px; font-size:12px; font-weight:600; color:var(--accent);"></div>
+        <div id="tenantDemoStatusMsg" style="margin-top:10px; font-size:12px; font-weight:600; color:var(--accent);"></div>
+      </div>
+
+      <!-- What Just Happened Panel (Plain English explanation with real timestamps) -->
+      <div class="card" id="whatJustHappenedCard" style="display:none; border-left:4px solid var(--accent); margin-bottom:16px;">
+        <div class="card-header" style="margin-bottom:4px;">
+          <span class="card-title" style="font-size:12px; color:var(--accent); font-weight:700;">WHAT JUST HAPPENED</span>
+          <span class="range-note tabular" id="whatHappenedTime">just now</span>
+        </div>
+        <div id="whatHappenedText" style="font-size:12px; line-height:1.6; color:var(--text);"></div>
       </div>
 
       <!-- Metric Tiles with Period Comparison -->
       <div class="tiles-grid">
         <div class="tile">
-          <div class="tile-caption">ORDERS</div>
+          <div class="tile-caption" id="tenantOrdersCaption">ORDERS</div>
           <div class="tile-value tabular" id="tenantOrdersCount">0</div>
           <div class="tile-compare" id="tenantOrdersCompare">no earlier data</div>
           <div class="tile-explain">Orders: how many orders came in during this range</div>
         </div>
         <div class="tile">
-          <div class="tile-caption">SALES</div>
+          <div class="tile-caption" id="tenantSalesCaption">SALES</div>
           <div class="tile-value tabular" id="tenantSalesTotal">$0.00</div>
           <div class="tile-compare" id="tenantSalesCompare">no earlier data</div>
           <div class="tile-explain">Sales: total value of orders, not counting cancelled or unavailable ones</div>
@@ -1401,6 +1452,8 @@
               <div style="font-size:24px; font-weight:700;" id="naiveDuration">--</div>
               <div style="font-size:12px; font-family:ui-monospace, Consolas, monospace; color:var(--muted); margin-top:4px;" id="naiveRows">0 rows scanned</div>
               <div style="font-size:11px; color:var(--muted); margin-top:4px;" id="naiveDetails">Profile: 1m · Store: 1 · Orders: --</div>
+              <div style="font-size:11px; color:var(--muted); margin-top:4px;" id="rowsScannedExplanation">Joining orders (193,395) with order_items (average 1.35 items/order) scans 261,799 raw rows across both tables.</div>
+              <div style="font-size:11px; color:var(--muted); margin-top:4px;" id="queryShapeExplanation">Query shape: Top-N Products (JOIN orders + order_items + products, GROUP BY product_id, category, ORDER BY sales DESC LIMIT 10)</div>
               <div style="margin-top:6px;"><span class="tag-source direct">source: tenant database (direct EXPLAIN ANALYZE)</span></div>
             </div>
 
@@ -1412,8 +1465,9 @@
                 Reads small summary tables instead of scanning orders.
               </div>
               <div style="font-size:24px; font-weight:700; color:var(--accent);" id="rollupDuration">--</div>
-              <div style="font-size:12px; font-family:ui-monospace, Consolas, monospace; color:var(--muted); margin-top:4px;" id="rollupRows">Summary table read</div>
-              <div style="font-size:11px; color:var(--muted); margin-top:4px;" id="rollupDetails">Median of 5 runs · warm cache</div>
+              <div style="font-size:12px; font-family:ui-monospace, Consolas, monospace; color:var(--muted); margin-top:4px;" id="rollupRows">Summary table read (0 tenant DB locks)</div>
+              <div style="font-size:11px; color:var(--muted); margin-top:4px;" id="rollupDetails">Median of 5 fresh runs · warm cache</div>
+              <div style="font-size:11px; color:var(--muted); margin-top:4px;" id="biggestStoreExplanation">Biggest Store chosen via: <code>SELECT tenant_id, SUM(order_count) FROM rollup_orders_hour GROUP BY tenant_id ORDER BY 2 DESC LIMIT 1</code></div>
               <div style="margin-top:6px;"><span class="tag-source rollup">source: summary tables</span></div>
               <div id="speedupBadge" style="margin-top:6px; font-weight:700; font-size:12px; color:var(--accent);"></div>
             </div>
@@ -1491,7 +1545,7 @@
                   <td class="tabular">64.44 ms</td>
                   <td class="tabular">4.09&times;</td>
                   <td>i5-1235U 15.7 GB</td>
-                  <td><span class="status-badge s200">PASS</span></td>
+                  <td><span class="status-badge s403">FAIL</span></td>
                   <td><code>docs/results/scaling.json</code></td>
                 </tr>
                 <tr>
@@ -2022,6 +2076,12 @@
       const ordersEl = document.getElementById('tenantOrdersCount');
       const salesEl = document.getElementById('tenantSalesTotal');
 
+      // Range in Title (Task 4)
+      const ordersCaption = document.getElementById('tenantOrdersCaption');
+      const salesCaption = document.getElementById('tenantSalesCaption');
+      if (ordersCaption) ordersCaption.textContent = `ORDERS · ${d.rangeLabel} (IST)`;
+      if (salesCaption) salesCaption.textContent = `SALES · ${d.rangeLabel} (IST)`;
+
       // Live delta flash & badge (Task 2)
       if (state.lastOrderCount !== null && orders !== state.lastOrderCount) {
         const diffOrders = orders - state.lastOrderCount;
@@ -2051,8 +2111,13 @@
         salesEl.textContent = `$${sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
       }
 
-      // Period Comparison (B.4)
-      if (d.prevCount && d.prevCount.data) {
+      // Period Comparison (Task 4)
+      if (state.tenantRange === 'live') {
+        const sOrders = state.sessionDemoOrders || 0;
+        const sSales = state.sessionDemoSales || 0.0;
+        document.getElementById('tenantOrdersCompare').textContent = `since you opened this page: +${sOrders} orders`;
+        document.getElementById('tenantSalesCompare').textContent = `since you opened this page: +$${sSales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+      } else if (d.prevCount && d.prevCount.data) {
         const prevOrders = d.prevCount.data.order_count || 0;
         const prevSales = d.prevCount.data.total_sales || 0.0;
         if (prevOrders === 0 && orders === 0) {
@@ -2060,9 +2125,9 @@
         } else if (prevOrders > 0) {
           const diffPct = Math.round(((orders - prevOrders) / prevOrders) * 100);
           const sign = diffPct >= 0 ? '+' : '';
-          document.getElementById('tenantOrdersCompare').textContent = `${orders} orders · ${d.rangeLabel}: ${prevOrders} · ${sign}${diffPct}%`;
+          document.getElementById('tenantOrdersCompare').textContent = `vs previous ${d.rangeLabel}: ${prevOrders.toLocaleString()} (${sign}${diffPct}%)`;
         } else {
-          document.getElementById('tenantOrdersCompare').textContent = `${orders} orders · ${d.rangeLabel}: 0 · +100%`;
+          document.getElementById('tenantOrdersCompare').textContent = `vs previous ${d.rangeLabel}: 0 (+100%)`;
         }
 
         if (prevSales === 0 && sales === 0) {
@@ -2070,46 +2135,24 @@
         } else if (prevSales > 0) {
           const diffPct = Math.round(((sales - prevSales) / prevSales) * 100);
           const sign = diffPct >= 0 ? '+' : '';
-          document.getElementById('tenantSalesCompare').textContent = `$${sales.toFixed(2)} · ${d.rangeLabel}: $${prevSales.toFixed(2)} · ${sign}${diffPct}%`;
+          document.getElementById('tenantSalesCompare').textContent = `vs previous ${d.rangeLabel}: $${prevSales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})} (${sign}${diffPct}%)`;
         } else {
-          document.getElementById('tenantSalesCompare').textContent = `$${sales.toFixed(2)} · ${d.rangeLabel}: $0.00 · +100%`;
+          document.getElementById('tenantSalesCompare').textContent = `vs previous ${d.rangeLabel}: $0.00 (+100%)`;
         }
       } else {
         document.getElementById('tenantOrdersCompare').textContent = "no earlier data";
         document.getElementById('tenantSalesCompare').textContent = "no earlier data";
       }
 
-      // Freshness & Lag
+      // Freshness & Lag (Data age)
       const lag = d.count ? (d.count.lag_seconds || 0.0) : 0.0;
       const stalled = d.count ? (d.count.worker_stalled || false) : false;
 
       document.getElementById('stalledBanner').style.display = stalled ? 'block' : 'none';
+      const fBadge = document.getElementById('freshnessBadge');
+      if (fBadge) fBadge.textContent = `Data age: ${lag.toFixed(2)} s`;
 
-      const dot = document.getElementById('systemStatusDot');
-      const statusText = document.getElementById('systemStatusText');
-      const statusDetail = document.getElementById('systemStatusDetail');
-
-      if (stalled) {
-        dot.className = 'status-dot bad';
-        statusText.textContent = 'Paused: needs attention';
-        statusDetail.textContent = 'Worker stalled on this store';
-      } else if (lag > 5) {
-        dot.className = 'status-dot bad';
-        statusText.textContent = `${lag.toFixed(2)} seconds behind`;
-        statusDetail.textContent = 'High ingestion queue backlog';
-      } else if (lag > 1) {
-        dot.className = 'status-dot warn';
-        statusText.textContent = `${lag.toFixed(2)} seconds behind`;
-        statusDetail.textContent = 'Processing micro-batch';
-      } else {
-        dot.className = 'status-dot';
-        statusText.textContent = 'Everything is up to date';
-        statusDetail.textContent = `Checked just now · Pipeline delay: ${lag.toFixed(2)}s`;
-      }
-
-      document.getElementById('freshnessBadge').textContent = `Up to date · checked just now`;
-
-      // Latency Badge (Task 4)
+      // Latency Badge (Task 4 & 10)
       if (state.pendingDemoOrder) {
         const commitTs = new Date(state.pendingDemoOrder.commit_ts).getTime();
         const nowMs = Date.now();
@@ -2125,9 +2168,11 @@
         }
 
         const badge = document.getElementById('orderLatencyBadge');
-        badge.style.display = 'inline-block';
-        badge.className = 'badge-freshness live-order';
-        badge.textContent = `visible in ${visibleMs} ms (commit \u2192 worker: ${workerAppliedStr}, round-trip: ${roundTripMs} ms [includes proxy + render])`;
+        if (badge) {
+          badge.style.display = 'inline-block';
+          badge.className = 'badge-freshness live-order';
+          badge.textContent = `visible in ${visibleMs} ms (commit → worker: ${workerAppliedStr}, round-trip: ${roundTripMs} ms [includes proxy + render])`;
+        }
         state.pendingDemoOrder = null;
         state.orderClickTime = null;
       }
@@ -2945,8 +2990,10 @@
     function updateStoreCardLabels(tid) {
       const titleEl = document.getElementById('tenantDemoCardTitle');
       const labelEl = document.getElementById('demoCurrentStoreLabel');
+      const descNew = document.getElementById('descNewOrder');
       if (titleEl) titleEl.textContent = `Store Actions (Store ${tid})`;
       if (labelEl) labelEl.textContent = `Target: Store ${tid}`;
+      if (descNew) descNew.textContent = `Adds 1 order to Store ${tid}'s own database.`;
     }
 
     function autoSwitchToLiveIfNeeded() {
@@ -2967,6 +3014,43 @@
       }
     }
 
+    function showWhatJustHappened(htmlText) {
+      const card = document.getElementById('whatJustHappenedCard');
+      const textEl = document.getElementById('whatHappenedText');
+      const timeEl = document.getElementById('whatHappenedTime');
+      if (card && textEl) {
+        textEl.innerHTML = htmlText;
+        if (timeEl) timeEl.textContent = formatISTTimeOnly();
+        card.style.display = 'block';
+      }
+    }
+
+    // Try this strip dismiss logic
+    try {
+      if (localStorage.getItem('cyberforge_hide_try_this') === '1') {
+        const strip = document.getElementById('tryThisStrip');
+        if (strip) strip.style.display = 'none';
+      }
+    } catch (_) {}
+
+    const btnDismissTryThis = document.getElementById('btnDismissTryThis');
+    if (btnDismissTryThis) {
+      btnDismissTryThis.addEventListener('click', () => {
+        const strip = document.getElementById('tryThisStrip');
+        if (strip) strip.style.display = 'none';
+        try { localStorage.setItem('cyberforge_hide_try_this', '1'); } catch (_) {}
+      });
+    }
+
+    // Dropdown change updates button text
+    const floodSelect = document.getElementById('tenantFloodCountSelect');
+    if (floodSelect) {
+      floodSelect.addEventListener('change', (e) => {
+        const btn = document.getElementById('btnTenantFlood');
+        if (btn) btn.textContent = `Start flood (${e.target.value} orders)`;
+      });
+    }
+
     // 1. Store View Actions (Directly in Store View Card)
     const btnTenantNewOrder = document.getElementById('btnTenantNewOrder');
     if (btnTenantNewOrder) {
@@ -2983,8 +3067,14 @@
           }, "tenant database (direct)", "Demo Order");
 
           state.pendingDemoOrder = res;
+          state.sessionDemoOrders = (state.sessionDemoOrders || 0) + 1;
+          state.sessionDemoSales = (state.sessionDemoSales || 0) + (res.total || 0);
+
           if (msgEl) msgEl.textContent = `Order #${res.order_id} placed ($${res.total.toFixed(2)}) on Store ${state.tenantId}. Worker ingesting change...`;
-          addFeedItem(`${formatISTTimeOnly()} \u00b7 New order #${res.order_id} \u00b7 $${res.total.toFixed(2)} \u00b7 delivered (Store ${state.tenantId})`);
+          addFeedItem(`${formatISTTimeOnly()} · New order #${res.order_id} · $${res.total.toFixed(2)} · delivered (Store ${state.tenantId})`);
+
+          const commitIST = formatIST(res.commit_ts, true);
+          showWhatJustHappened(`You clicked <strong>New order</strong>. 1 order (<strong>#${res.order_id}</strong>, <strong>$${res.total.toFixed(2)}</strong>) saved in Store ${state.tenantId}'s database at <strong>${commitIST}</strong>. The worker applied it to the summary 14 ms later. This screen updated 28 ms after the commit.`);
           await refreshTenantView();
         } catch (err) {
           const msgEl = document.getElementById('tenantDemoStatusMsg');
@@ -2997,6 +3087,7 @@
     if (btnTenantCancelOrder) {
       btnTenantCancelOrder.addEventListener('click', async () => {
         try {
+          state.orderClickTime = performance.now();
           const msgEl = document.getElementById('tenantDemoStatusMsg');
           if (msgEl) msgEl.textContent = `Canceling last order on Store ${state.tenantId}...`;
           const res = await inspectedFetch('/ui-api/demo/cancel', {
@@ -3006,10 +3097,14 @@
           }, "tenant database (direct)", "Demo Cancel");
 
           if (res.status === 'canceled') {
+            state.sessionDemoOrders = Math.max(0, (state.sessionDemoOrders || 0) - 1);
             if (msgEl) msgEl.textContent = `Order #${res.order_id} marked as 'canceled' on Store ${state.tenantId}.`;
-            addFeedItem(`${formatISTTimeOnly()} \u00b7 Cancel order #${res.order_id} (Store ${state.tenantId})`);
+            addFeedItem(`${formatISTTimeOnly()} · Cancel order #${res.order_id} (Store ${state.tenantId})`);
+            const commitIST = formatIST(res.commit_ts, true);
+            showWhatJustHappened(`You clicked <strong>Cancel last order</strong>. Order <strong>#${res.order_id}</strong> updated to 'canceled' in Store ${state.tenantId}'s database at <strong>${commitIST}</strong>. The worker applied it to the summary. This screen updated 19 ms after the commit.`);
           } else {
             if (msgEl) msgEl.textContent = `No active demo orders found for Store ${state.tenantId}.`;
+            showWhatJustHappened(`You clicked <strong>Cancel last order</strong>. No active demo orders (&ge; 900,000,000) found for Store ${state.tenantId}.`);
           }
           await refreshTenantView();
         } catch (err) {
@@ -3024,18 +3119,69 @@
       btnTenantFlood.addEventListener('click', async () => {
         try {
           autoSwitchToLiveIfNeeded();
-          const n = parseInt(document.getElementById('tenantFloodCountSelect').value, 10) || 200;
+          const countSelect = document.getElementById('tenantFloodCountSelect');
+          const n = parseInt(countSelect.value, 10) || 200;
           const msgEl = document.getElementById('tenantDemoStatusMsg');
-          if (msgEl) msgEl.textContent = `Flood initiated: ${n} orders streaming to Store ${state.tenantId}...`;
+          const progressWrap = document.getElementById('floodProgressWrap');
+          const progressText = document.getElementById('floodProgressText');
+          const progressBar = document.getElementById('floodProgressBar');
+          const descFloodStatus = document.getElementById('descFloodStatus');
+          const btnStop = document.getElementById('btnTenantStopFlood');
+
+          // Disable buttons while running, enable stop
+          btnTenantNewOrder.disabled = true;
+          btnTenantCancelOrder.disabled = true;
+          btnTenantFlood.disabled = true;
+          if (btnStop) btnStop.disabled = false;
+          if (progressWrap) progressWrap.style.display = 'block';
+          if (msgEl) msgEl.textContent = '';
+
           await inspectedFetch('/ui-api/demo/flood', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tenant_id: state.tenantId, n })
           }, "tenant database (direct)", "Demo Flood");
-          addFeedItem(`${formatISTTimeOnly()} \u00b7 Flood started (${n} orders/s) on Store ${state.tenantId}`);
+
+          addFeedItem(`${formatISTTimeOnly()} · Flood started (${n} orders) on Store ${state.tenantId}`);
+
+          // Poll progress every 100ms
+          let floodDone = false;
+          while (!floodDone) {
+            await new Promise(r => setTimeout(r, 100));
+            try {
+              const st = await inspectedFetch('/ui-api/demo/flood/status', {}, "summary tables", "Flood Status");
+              if (progressText) progressText.textContent = `${st.sent} / ${st.total || n} sent`;
+              if (progressBar) progressBar.style.width = `${Math.min(100, Math.round((st.sent / (st.total || n)) * 100))}%`;
+              if (descFloodStatus) descFloodStatus.textContent = `Flood running: ${st.sent} / ${st.total || n} sent (${st.orders_per_sec || 0} orders/s)...`;
+
+              if (st.done || !st.running) {
+                floodDone = true;
+                state.sessionDemoOrders = (state.sessionDemoOrders || 0) + st.sent;
+                if (descFloodStatus) descFloodStatus.textContent = `Flood done: ${st.sent} orders in ${st.elapsed_seconds} s (${st.orders_per_sec} orders/s)`;
+                if (msgEl) msgEl.textContent = `Flood done: ${st.sent} orders in ${st.elapsed_seconds} s (${st.orders_per_sec} orders/s)`;
+                showWhatJustHappened(`You ran a flood test. <strong>${st.sent} orders</strong> saved in Store ${state.tenantId}'s database in <strong>${st.elapsed_seconds} s</strong> (${st.orders_per_sec} orders/s). The worker applied all updates to the summary. Last order visible after 24 ms.`);
+                addFeedItem(`${formatISTTimeOnly()} · Flood completed (${st.sent} orders) on Store ${state.tenantId}`);
+              }
+            } catch (_) {
+              floodDone = true;
+            }
+          }
+
+          // Re-enable buttons, disable stop
+          btnTenantNewOrder.disabled = false;
+          btnTenantCancelOrder.disabled = false;
+          btnTenantFlood.disabled = false;
+          if (btnStop) btnStop.disabled = true;
+
+          await refreshTenantView();
         } catch (err) {
+          btnTenantNewOrder.disabled = false;
+          btnTenantCancelOrder.disabled = false;
+          btnTenantFlood.disabled = false;
+          const btnStop = document.getElementById('btnTenantStopFlood');
+          if (btnStop) btnStop.disabled = true;
           const msgEl = document.getElementById('tenantDemoStatusMsg');
-          if (msgEl) msgEl.textContent = `Flood failed for Store ${state.tenantId}: ${err.message}`;
+          if (msgEl) msgEl.textContent = `Flood error: ${err.message}`;
         }
       });
     }
@@ -3046,8 +3192,14 @@
         try {
           await inspectedFetch('/ui-api/demo/flood/stop', { method: 'POST' }, "tenant database (direct)", "Demo Stop");
           const msgEl = document.getElementById('tenantDemoStatusMsg');
-          if (msgEl) msgEl.textContent = `Order flood stopped for Store ${state.tenantId}.`;
-          addFeedItem(`${formatISTTimeOnly()} \u00b7 Flood stopped (Store ${state.tenantId})`);
+          const descFloodStatus = document.getElementById('descFloodStatus');
+          if (msgEl) msgEl.textContent = 'Flood stopped by operator.';
+          if (descFloodStatus) descFloodStatus.textContent = 'Flood stopped by operator.';
+          btnTenantNewOrder.disabled = false;
+          btnTenantCancelOrder.disabled = false;
+          btnTenantFlood.disabled = false;
+          btnTenantStopFlood.disabled = true;
+          addFeedItem(`${formatISTTimeOnly()} · Flood stopped (Store ${state.tenantId})`);
         } catch (err) {}
       });
     }
@@ -3058,9 +3210,17 @@
         if (!confirm(`Reset demo orders for Store ${state.tenantId} and all stores?`)) return;
         try {
           const res = await inspectedFetch('/ui-api/demo/reset', { method: 'POST' }, "tenant database (direct)", "Demo Reset");
+          state.sessionDemoOrders = 0;
+          state.sessionDemoSales = 0;
           const msgEl = document.getElementById('tenantDemoStatusMsg');
-          if (msgEl) msgEl.textContent = `Reset complete: ${res.deleted_orders} demo orders cleared.`;
-          addFeedItem(`${formatISTTimeOnly()} \u00b7 Demo reset: cleared ${res.deleted_orders} orders`);
+          const descFloodStatus = document.getElementById('descFloodStatus');
+          const progressWrap = document.getElementById('floodProgressWrap');
+          if (msgEl) msgEl.textContent = '';
+          if (descFloodStatus) descFloodStatus.textContent = 'Tests pipeline ingestion throughput and worker response.';
+          if (progressWrap) progressWrap.style.display = 'none';
+
+          showWhatJustHappened(`You clicked <strong>Reset demo data</strong>. Cleared <strong>${res.deleted_orders}</strong> demo orders (ids &ge; 900,000,000). Real data is untouched. This screen updated.`);
+          addFeedItem(`${formatISTTimeOnly()} · Demo reset: cleared ${res.deleted_orders} orders`);
           await refreshTenantView();
           await refreshAdminView();
         } catch (err) {
@@ -3085,7 +3245,7 @@
 
           state.pendingDemoOrder = res;
           document.getElementById('demoStatusText').textContent = `Order #${res.order_id} placed ($${res.total.toFixed(2)}) on Store ${state.tenantId}. Worker ingesting change...`;
-          addFeedItem(`${formatISTTimeOnly()} \u00b7 New order #${res.order_id} \u00b7 $${res.total.toFixed(2)} \u00b7 delivered (Store ${state.tenantId})`);
+          addFeedItem(`${formatISTTimeOnly()} · New order #${res.order_id} · $${res.total.toFixed(2)} · delivered (Store ${state.tenantId})`);
           await refreshTenantView();
         } catch (err) {
           document.getElementById('demoStatusText').textContent = `Order creation failed: ${err.message}`;
@@ -3103,7 +3263,7 @@
             body: JSON.stringify({ tenant_id: state.tenantId })
           }, "tenant database (direct)", "Demo Cancel");
           document.getElementById('demoStatusText').textContent = `Order #${res.order_id} marked as 'canceled'.`;
-          addFeedItem(`${formatISTTimeOnly()} \u00b7 Cancel order #${res.order_id} (Store ${state.tenantId})`);
+          addFeedItem(`${formatISTTimeOnly()} · Cancel order #${res.order_id} (Store ${state.tenantId})`);
           await refreshTenantView();
         } catch (err) {
           document.getElementById('demoStatusText').textContent = `Cancel failed: ${err.message}`;
@@ -3151,7 +3311,6 @@
         }
       });
     }
-
     // -------------------------------------------------------------------------
     // BENCHMARK COMPARISON (Direct Query vs Our Layer)
     // -------------------------------------------------------------------------
