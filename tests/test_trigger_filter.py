@@ -27,56 +27,73 @@ def test_early_filter():
     l_cur = listener.cursor()
     l_cur.execute("LISTEN outbox")
 
-    # Pick an order to test with
-    cur.execute("SELECT order_id, status, created_at, total, updated_at FROM orders WHERE tenant_id = %s LIMIT 1", (tid,))
-    order_id, status, created_at, total, updated_at = cur.fetchone()
+    # Use dedicated test order in >= 900M range to never mutate dataset rows
+    order_id = 985_000_001
+    item_id = 985_000_001
+    total = 100.00
+    item_qty = 1
+    item_price = 100.00
 
-    cur.execute("SELECT count(*) FROM outbox")
-    cnt_before = cur.fetchone()[0]
+    cur.execute("SELECT customer_id FROM customers WHERE tenant_id = %s LIMIT 1", (tid,))
+    cid = cur.fetchone()[0]
+    cur.execute("SELECT product_id FROM products LIMIT 1")
+    pid = cur.fetchone()[0]
 
-    # TEST 1: Irrelevant update (touch updated_at only)
-    print("\n[TEST 1] Updating only updated_at on order (irrelevant change)...")
-    cur.execute("UPDATE orders SET updated_at = clock_timestamp() WHERE order_id = %s", (order_id,))
-    
-    cur.execute("SELECT count(*) FROM outbox")
-    cnt_after = cur.fetchone()[0]
-    outbox_diff = cnt_after - cnt_before
+    # Pre-clean
+    cur.execute("DELETE FROM order_items WHERE order_id = %s", (order_id,))
+    cur.execute("DELETE FROM orders WHERE order_id = %s", (order_id,))
 
-    listener.poll()
-    notifies = len(listener.notifies)
-    print(f"  Outbox rows emitted: {outbox_diff} (Expected: 0)")
-    print(f"  Notifications received: {notifies} (Expected: 0)")
-    assert outbox_diff == 0, f"Expected 0 outbox rows for irrelevant update, got {outbox_diff}"
-    assert notifies == 0, f"Expected 0 notifications for irrelevant update, got {notifies}"
-    print("  [PASS] Irrelevant order update emitted 0 rows and 0 notifications!")
+    try:
+        cur.execute("INSERT INTO orders (order_id, tenant_id, customer_id, status, total, created_at, updated_at) "
+                    "VALUES (%s, %s, %s, 'delivered', %s, now(), now())", (order_id, tid, cid, total))
+        cur.execute("INSERT INTO order_items (item_id, order_id, tenant_id, product_id, qty, price) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)", (item_id, order_id, tid, pid, item_qty, item_price))
 
-    # TEST 2: Relevant update (touch total)
-    print("\n[TEST 2] Updating total on order (relevant change)...")
-    cur.execute("UPDATE orders SET total = total + 10.00 WHERE order_id = %s", (order_id,))
-    cur.execute("SELECT count(*) FROM outbox")
-    cnt_after_rel = cur.fetchone()[0]
-    rel_diff = cnt_after_rel - cnt_after
+        listener.poll()
+        listener.notifies.clear()
 
-    listener.poll()
-    rel_notifies = len(listener.notifies)
-    listener.notifies.clear()
-    print(f"  Outbox rows emitted: {rel_diff} (Expected: > 0)")
-    print(f"  Notifications received: {rel_notifies} (Expected: >= 1)")
-    assert rel_diff > 0, f"Expected outbox rows for relevant update, got {rel_diff}"
-    assert rel_notifies >= 1, "Expected notification for relevant update"
-    print("  [PASS] Relevant order update emitted outbox row and notification!")
+        cur.execute("SELECT count(*) FROM outbox")
+        cnt_before = cur.fetchone()[0]
 
-    # Revert total
-    cur.execute("UPDATE orders SET total = %s WHERE order_id = %s", (total, order_id))
-    listener.poll()
-    listener.notifies.clear()
+        # TEST 1: Irrelevant update (touch updated_at only)
+        print("\n[TEST 1] Updating only updated_at on order (irrelevant change)...")
+        cur.execute("UPDATE orders SET updated_at = clock_timestamp() WHERE order_id = %s", (order_id,))
+        
+        cur.execute("SELECT count(*) FROM outbox")
+        cnt_after = cur.fetchone()[0]
+        outbox_diff = cnt_after - cnt_before
 
-    # TEST 3: Order items irrelevant update (if any columns) vs relevant update (qty)
-    print("\n[TEST 3] Updating qty on order item (relevant change)...")
-    cur.execute("SELECT item_id, qty, price, product_id FROM order_items WHERE order_id = %s LIMIT 1", (order_id,))
-    item_row = cur.fetchone()
-    if item_row:
-        item_id, item_qty, item_price, item_pid = item_row
+        listener.poll()
+        notifies = len(listener.notifies)
+        print(f"  Outbox rows emitted: {outbox_diff} (Expected: 0)")
+        print(f"  Notifications received: {notifies} (Expected: 0)")
+        assert outbox_diff == 0, f"Expected 0 outbox rows for irrelevant update, got {outbox_diff}"
+        assert notifies == 0, f"Expected 0 notifications for irrelevant update, got {notifies}"
+        print("  [PASS] Irrelevant order update emitted 0 rows and 0 notifications!")
+
+        # TEST 2: Relevant update (touch total)
+        print("\n[TEST 2] Updating total on order (relevant change)...")
+        cur.execute("UPDATE orders SET total = total + 10.00 WHERE order_id = %s", (order_id,))
+        cur.execute("SELECT count(*) FROM outbox")
+        cnt_after_rel = cur.fetchone()[0]
+        rel_diff = cnt_after_rel - cnt_after
+
+        listener.poll()
+        rel_notifies = len(listener.notifies)
+        listener.notifies.clear()
+        print(f"  Outbox rows emitted: {rel_diff} (Expected: > 0)")
+        print(f"  Notifications received: {rel_notifies} (Expected: >= 1)")
+        assert rel_diff > 0, f"Expected outbox rows for relevant update, got {rel_diff}"
+        assert rel_notifies >= 1, "Expected notification for relevant update"
+        print("  [PASS] Relevant order update emitted outbox row and notification!")
+
+        # Revert total
+        cur.execute("UPDATE orders SET total = %s WHERE order_id = %s", (total, order_id))
+        listener.poll()
+        listener.notifies.clear()
+
+        # TEST 3: Order items irrelevant update (if any columns) vs relevant update (qty)
+        print("\n[TEST 3] Updating qty on order item (relevant change)...")
         cur.execute("SELECT count(*) FROM outbox")
         cnt_item_before = cur.fetchone()[0]
 
@@ -97,10 +114,13 @@ def test_early_filter():
         listener.poll()
         listener.notifies.clear()
 
-    l_cur.close()
-    listener.close()
-    cur.close()
-    conn.close()
+    finally:
+        cur.execute("DELETE FROM order_items WHERE order_id = %s", (order_id,))
+        cur.execute("DELETE FROM orders WHERE order_id = %s", (order_id,))
+        l_cur.close()
+        listener.close()
+        cur.close()
+        conn.close()
 
     print("\n>>> ALL EARLY FILTER & NOTIFY TESTS PASSED! <<<")
     return True

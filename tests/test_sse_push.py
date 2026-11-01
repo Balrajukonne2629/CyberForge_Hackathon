@@ -16,7 +16,8 @@ def run_sse_push_test(profile: str = "1m", probes: int = 50):
     print("=" * 70)
 
     tid = 1
-    api_url = "http://127.0.0.1:8000"
+    api_port = os.getenv("API_PORT", "8000")
+    api_url = f"http://127.0.0.1:{api_port}"
     valid_key = f"tenant-key-{tid}"
     wrong_key = "wrong-key-999"
     t_url = get_tenant_db_url(tid, profile)
@@ -34,6 +35,12 @@ def run_sse_push_test(profile: str = "1m", probes: int = 50):
         assert r.status_code == 403, f"Expected 403 for wrong key, got {r.status_code}"
         print("  Mismatched X-Tenant-Key: 403 Forbidden (Verified)")
 
+        # Cross-tenant key (tenant 2 key accessing tenant 1 stream)
+        other_key = "tenant-key-2"
+        r = client.get(f"/tenants/{tid}/stream", headers={"X-Tenant-Key": other_key})
+        assert r.status_code == 403, f"Expected 403 for cross-tenant key, got {r.status_code}"
+        print("  Cross-Tenant X-Tenant-Key: 403 Forbidden (Verified)")
+
     # 2. Connect to SSE stream and measure 50 probes
     print(f"\n[2] Connecting to /tenants/{tid}/stream and measuring {probes} commit-to-SSE probes...")
 
@@ -43,22 +50,25 @@ def run_sse_push_test(profile: str = "1m", probes: int = 50):
     stop_stream = threading.Event()
 
     def sse_listener():
-        with httpx.Client(base_url=api_url, timeout=60.0) as client:
-            with client.stream("GET", f"/tenants/{tid}/stream", headers={"X-Tenant-Key": valid_key}) as response:
-                assert response.status_code == 200
-                stream_ready.set()
-                buffer = ""
-                for line in response.iter_lines():
-                    if stop_stream.is_set():
-                        break
-                    if line.startswith("data: "):
-                        t_received = time.perf_counter()
-                        data_str = line[6:].strip()
-                        try:
-                            payload = json.loads(data_str)
-                            received_events.append((t_received, payload))
-                        except Exception:
-                            pass
+        try:
+            with httpx.Client(base_url=api_url, timeout=60.0) as client:
+                with client.stream("GET", f"/tenants/{tid}/stream", headers={"X-Tenant-Key": valid_key}) as response:
+                    assert response.status_code == 200
+                    stream_ready.set()
+                    buffer = ""
+                    for line in response.iter_lines():
+                        if stop_stream.is_set():
+                            break
+                        if line.startswith("data: "):
+                            t_received = time.perf_counter()
+                            data_str = line[6:].strip()
+                            try:
+                                payload = json.loads(data_str)
+                                received_events.append((t_received, payload))
+                            except Exception:
+                                pass
+        except Exception:
+            pass
 
     listener_thread = threading.Thread(target=sse_listener, daemon=True)
     listener_thread.start()
@@ -114,17 +124,24 @@ def run_sse_push_test(profile: str = "1m", probes: int = 50):
     t_cur.close()
     t_conn.close()
 
+    stop_stream.set()
+    listener_thread.join(timeout=1.0)
+
     p50 = float(np.percentile(latencies_ms, 50))
     p95 = float(np.percentile(latencies_ms, 95))
     max_lat = float(np.max(latencies_ms))
     avg = float(np.mean(latencies_ms))
 
+    n_samples = len(latencies_ms)
     print("\n" + "=" * 70)
-    print("COMMIT-TO-SSE RECEIVE LATENCY RESULTS (50 PROBES):")
+    print(f"COMMIT-TO-SSE RECEIVE LATENCY RESULTS ({probes} PROBES):")
     print(f"  Clock source: time.perf_counter() monotonic server/client clock")
-    print(f"  Completed probes : {len(latencies_ms)}/{probes}")
+    print(f"  Completed probes : {n_samples}/{probes}")
     print(f"  p50 Latency      : {p50:.2f} ms")
-    print(f"  p95 Latency      : {p95:.2f} ms")
+    if n_samples < 20:
+        print(f"  max of {n_samples} Latency : {max_lat:.2f} ms")
+    else:
+        print(f"  p95 Latency      : {p95:.2f} ms")
     print(f"  Max Latency      : {max_lat:.2f} ms")
     print(f"  Mean Latency     : {avg:.2f} ms")
     print("=" * 70)

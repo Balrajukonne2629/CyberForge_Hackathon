@@ -68,6 +68,37 @@ class MultiTenantWorker:
         self.dirty_tenants: Set[int] = set(self.owned_tenants)  # Initial safety sweep on startup
 
         self.selector = selectors.DefaultSelector()
+        self.start_time = time.time()
+        self.last_sweep_time = time.time()
+        self.last_loop_ms = 0.0
+
+        # Create worker_telemetry table in rollup-db
+        self.r_cur.execute("""
+            CREATE TABLE IF NOT EXISTS worker_telemetry (
+                worker_id int PRIMARY KEY,
+                mode text NOT NULL,
+                start_time timestamp NOT NULL,
+                last_sweep timestamp NOT NULL,
+                last_loop_ms numeric(10,2) NOT NULL DEFAULT 0.0,
+                updated_at timestamp NOT NULL DEFAULT clock_timestamp()
+            );
+        """)
+        # Initialize or update worker telemetry with actual process start time
+        self.r_cur.execute("""
+            INSERT INTO worker_telemetry (worker_id, mode, start_time, last_sweep, last_loop_ms, updated_at)
+            VALUES (%s, %s, to_timestamp(%s), to_timestamp(%s), %s, clock_timestamp())
+            ON CONFLICT (worker_id) DO UPDATE SET
+                mode = EXCLUDED.mode,
+                start_time = EXCLUDED.start_time,
+                last_sweep = EXCLUDED.last_sweep,
+                last_loop_ms = EXCLUDED.last_loop_ms,
+                updated_at = clock_timestamp()
+        """, (self.worker_id, self.mode, self.start_time, self.last_sweep_time, self.last_loop_ms))
+        self.r_conn.commit()
+
+        self.reconnect_backoff: Dict[int, float] = {}
+        self.next_reconnect_time: Dict[int, float] = {}
+
         self._connect_all_tenants()
 
     def _connect_all_tenants(self):
@@ -77,7 +108,11 @@ class MultiTenantWorker:
             self._connect_tenant(tid)
         print(f"Connected to {len(self.tenant_conns)} tenant DBs in {time.time() - t0:.2f}s")
 
-    def _connect_tenant(self, tid: int):
+    def _connect_tenant(self, tid: int) -> bool:
+        now = time.time()
+        if now < self.next_reconnect_time.get(tid, 0.0):
+            return False
+
         try:
             # Unregister old socket if any
             old_conn = self.tenant_conns.get(tid)
@@ -100,9 +135,17 @@ class MultiTenantWorker:
 
             self.tenant_conns[tid] = c
             self.tenant_curs[tid] = cur
+            self.reconnect_backoff[tid] = 1.0
+            self.next_reconnect_time.pop(tid, None)
             self.dirty_tenants.add(tid)
+            print(f"[RECONNECT] Tenant {tid}: connected successfully (LISTEN outbox active).", flush=True)
+            return True
         except Exception as e:
-            print(f"[WARN] Failed to connect to tenant {tid}: {e}")
+            curr_backoff = self.reconnect_backoff.get(tid, 1.0)
+            self.next_reconnect_time[tid] = now + curr_backoff
+            self.reconnect_backoff[tid] = min(30.0, curr_backoff * 2.0)
+            print(f"[RECONNECT] Tenant {tid}: connection failed ({e}), next retry in {curr_backoff:.1f}s (backoff={self.reconnect_backoff[tid]:.1f}s)", flush=True)
+            return False
 
     def _get_tenant_cursor_and_state(self, tid: int):
         self.r_cur.execute("""
@@ -173,7 +216,8 @@ class MultiTenantWorker:
                 max_batch_size
             ))
             rows = t_cur.fetchall()
-        except Exception:
+        except Exception as query_err:
+            print(f"[RECONNECT] Tenant {tid}: error during fetch ({query_err}). Reconnecting...", flush=True)
             self._connect_tenant(tid)
             return 0, False
 
@@ -411,7 +455,25 @@ class MultiTenantWorker:
                     while conn.notifies:
                         n = conn.notifies.pop(0)
                         self.dirty_tenants.add(tid)
-                except Exception:
+
+                    # Check for socket EOF (server connection termination)
+                    import socket
+                    s = socket.fromfd(conn.fileno(), socket.AF_INET, socket.SOCK_STREAM)
+                    s.setblocking(False)
+                    try:
+                        is_eof = (s.recv(1, socket.MSG_PEEK) == b'')
+                    except (BlockingIOError, InterruptedError):
+                        is_eof = False
+                    except Exception:
+                        is_eof = True
+                    finally:
+                        s.close()
+
+                    if is_eof:
+                        print(f"[RECONNECT] Tenant {tid}: remote closed connection (EOF). Reconnecting...", flush=True)
+                        self._connect_tenant(tid)
+                except Exception as poll_err:
+                    print(f"[RECONNECT] Tenant {tid}: connection error during poll ({poll_err}). Reconnecting...", flush=True)
                     self._connect_tenant(tid)
 
         # Coalesce bursts if any tenants became dirty (debounce)
@@ -439,6 +501,16 @@ class MultiTenantWorker:
                                        ELSE 0.0 END
                 WHERE tenant_id = ANY(%s) AND NOT stalled
             """, (self.owned_tenants,))
+
+            self.r_cur.execute("""
+                INSERT INTO worker_telemetry (worker_id, mode, start_time, last_sweep, last_loop_ms, updated_at)
+                VALUES (%s, %s, to_timestamp(%s), to_timestamp(%s), %s, clock_timestamp())
+                ON CONFLICT (worker_id) DO UPDATE SET
+                    mode = EXCLUDED.mode,
+                    last_sweep = EXCLUDED.last_sweep,
+                    last_loop_ms = EXCLUDED.last_loop_ms,
+                    updated_at = EXCLUDED.updated_at
+            """, (self.worker_id, self.mode, self.start_time, self.last_sweep_time, self.last_loop_ms))
             self.r_conn.commit()
         except Exception:
             self.r_conn.rollback()
@@ -457,6 +529,7 @@ class MultiTenantWorker:
                         if tid not in self.stalled_tenants:
                             self.dirty_tenants.add(tid)
                     last_sweep = now
+                    self.last_sweep_time = now
 
                 if now - last_hb >= 2.0:
                     self.update_idle_heartbeats()
@@ -469,10 +542,12 @@ class MultiTenantWorker:
                         self.poll_notifications(wait_time)
 
                     if self.dirty_tenants:
-                        self.run_one_cycle()
+                        res = self.run_one_cycle()
+                        self.last_loop_ms = round(res["duration"] * 1000.0, 2)
                 else:
                     # Poll mode
                     res = self.run_one_cycle()
+                    self.last_loop_ms = round(res["duration"] * 1000.0, 2)
                     if res["active_tenants"] == 0:
                         time.sleep(self.poll_interval)
 
