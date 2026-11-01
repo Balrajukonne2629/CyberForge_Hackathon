@@ -12,7 +12,7 @@
         "id": "ingest-pipeline",
         "label": "Event-Driven CDC Pipeline",
         "focus": ["client_app", "simulator", "main_oltp", "outbox_log", "worker_engine", "rollup_orders", "rollup_products"],
-        "note": "Mutations to tenant DBs emit signed diffs via triggers; worker multiplexes 100 tenant sockets and folds in memory."
+        "note": "Mutations emit signed diffs into each tenant's dedicated local outbox table; worker multiplexes 100 tenant sockets."
       },
       {
         "id": "serving-pipeline",
@@ -71,12 +71,12 @@
     {
       "id": "outbox_log",
       "type": "messagebus",
-      "label": "Outbox & NOTIFY",
-      "sublabel": "Signed Diffs (+1/-1)",
+      "label": "100 Local Outboxes",
+      "sublabel": "Separate Table per DB",
       "width": 130,
       "stage": 1,
       "row": 2,
-      "tag": "xid8 ordered"
+      "tag": "100x isolated"
     },
     {
       "id": "worker_engine",
@@ -246,8 +246,8 @@
       "dot": "emerald",
       "title": "Event CDC Ingest",
       "items": [
-        "Statement triggers filter writes and emit signed diffs (+1 / -1) with xid8",
-        "PostgreSQL LISTEN/NOTIFY and selectors eliminate 200ms idle polling",
+        "Each tenant DB maintains a dedicated local outbox table for zero write contention",
+        "PostgreSQL LISTEN/NOTIFY and selectors eliminate 200ms idle polling across 100 DBs",
         "Deficit Round-Robin (DRR) fairness prevents tenant starvation"
       ]
     },

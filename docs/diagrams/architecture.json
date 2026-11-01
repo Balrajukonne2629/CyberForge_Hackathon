@@ -9,25 +9,47 @@
       {
         "id": "query-path",
         "label": "Analytical Query Serving",
-        "focus": ["dashboards", "api", "rollupdb"],
+        "focus": [
+          "dashboards",
+          "api",
+          "rollupdb"
+        ],
         "note": "Tenant dashboards query central rollups via FastAPI in sub-10ms p95. Zero analytical load touches tenant OLTP databases."
       },
       {
         "id": "event-cdc-path",
         "label": "Event-Driven CDC Ingestion",
-        "focus": ["mainapp", "db_1", "db_2", "db_n", "outbox", "worker", "rollupdb"],
-        "note": "Triggers early-filter writes and emit signed diffs. The worker multiplexes 100 tenant sockets with 0ms idle polling overhead."
+        "focus": [
+          "mainapp",
+          "db_1",
+          "outbox_1",
+          "db_n",
+          "outbox_n",
+          "worker",
+          "rollupdb"
+        ],
+        "note": "Mutations to tenant DBs emit signed diffs into each local outbox table; worker multiplexes 100 tenant sockets via LISTEN/NOTIFY."
       },
       {
         "id": "sse-stream-path",
         "label": "Real-Time SSE Streaming",
-        "focus": ["worker", "rollupdb", "api", "dashboards"],
+        "focus": [
+          "worker",
+          "rollupdb",
+          "api",
+          "dashboards"
+        ],
         "note": "Rollup changes fire NOTIFY to FastAPI, pushing live updates to dashboards via Server-Sent Events (SSE) within 40ms of commit."
       },
       {
         "id": "rebuild-admin",
         "label": "Zero-Downtime Rebuild & Isolation",
-        "focus": ["api", "worker", "rollupdb", "quarantine"],
+        "focus": [
+          "api",
+          "worker",
+          "rollupdb",
+          "quarantine"
+        ],
         "note": "Admin endpoint initiates worker rebuild into shadow rollups with atomic swap. Corrupted rows are isolated in quarantine."
       }
     ]
@@ -38,16 +60,28 @@
       "type": "frontend",
       "label": "Store Dashboards",
       "sublabel": "Browser UI & Live SSE",
-      "pos": [60, 180],
-      "size": [160, 64]
+      "pos": [
+        60,
+        180
+      ],
+      "size": [
+        160,
+        64
+      ]
     },
     {
       "id": "harness",
       "type": "external",
       "label": "Bench & Test Harness",
       "sublabel": "Fairness & Load Tests",
-      "pos": [60, 320],
-      "size": [160, 64]
+      "pos": [
+        60,
+        320
+      ],
+      "size": [
+        160,
+        64
+      ]
     },
     {
       "id": "api",
@@ -55,8 +89,14 @@
       "label": "FastAPI Gateway",
       "sublabel": "Auth, SSE & Throttle :8000",
       "brand": "fastapi",
-      "pos": [320, 250],
-      "size": [170, 74],
+      "pos": [
+        320,
+        250
+      ],
+      "size": [
+        170,
+        74
+      ],
       "tag": "REST & SSE"
     },
     {
@@ -65,8 +105,14 @@
       "label": "Central Rollup DB",
       "sublabel": "Hourly & Daily Rollups",
       "brand": "postgresql",
-      "pos": [620, 170],
-      "size": [175, 70],
+      "pos": [
+        620,
+        170
+      ],
+      "size": [
+        175,
+        70
+      ],
       "tag": "Port :5433"
     },
     {
@@ -75,8 +121,14 @@
       "label": "Event-Driven Worker",
       "sublabel": "selectors multiplex & DRR",
       "brand": "python",
-      "pos": [620, 310],
-      "size": [175, 70],
+      "pos": [
+        620,
+        310
+      ],
+      "size": [
+        175,
+        70
+      ],
       "tag": "0ms idle wait"
     },
     {
@@ -84,69 +136,120 @@
       "type": "security",
       "label": "Quarantine Store",
       "sublabel": "Rejected row tracking",
-      "pos": [620, 440],
-      "size": [175, 60],
+      "pos": [
+        620,
+        440
+      ],
+      "size": [
+        175,
+        60
+      ],
       "tag": "Fail-Closed"
-    },
-    {
-      "id": "outbox",
-      "type": "messagebus",
-      "label": "Tenant Outbox & NOTIFY",
-      "sublabel": "Signed diffs & NOTIFY",
-      "pos": [935, 260],
-      "size": [140, 74],
-      "tag": "xid8 ordered"
-    },
-    {
-      "id": "db_1",
-      "type": "database",
-      "label": "Tenant DB 001",
-      "sublabel": "tenant_001 on :5432",
-      "brand": "postgresql",
-      "pos": [1135, 150],
-      "size": [130, 52],
-      "tag": "Isolated"
-    },
-    {
-      "id": "db_2",
-      "type": "database",
-      "label": "Tenant DB 002",
-      "sublabel": "tenant_002 on :5432",
-      "brand": "postgresql",
-      "pos": [1135, 235],
-      "size": [130, 52],
-      "tag": "Isolated"
-    },
-    {
-      "id": "db_n",
-      "type": "database",
-      "label": "Tenant DB 100",
-      "sublabel": "tenant_003..100 DBs",
-      "brand": "postgresql",
-      "pos": [1135, 320],
-      "size": [130, 52],
-      "tag": "Isolated"
     },
     {
       "id": "mainapp",
       "type": "external",
       "label": "Store Clients / Sim",
       "sublabel": "Concurrent order writes",
-      "pos": [1135, 45],
-      "size": [130, 50],
+      "pos": [
+        1130,
+        45
+      ],
+      "size": [
+        140,
+        50
+      ],
       "tag": "OLTP Mutators"
+    },
+    {
+      "id": "db_1",
+      "type": "database",
+      "label": "Tenant DB 001",
+      "sublabel": "orders & order_items",
+      "brand": "postgresql",
+      "pos": [
+        1130,
+        140
+      ],
+      "size": [
+        140,
+        52
+      ],
+      "tag": "Port :5432"
+    },
+    {
+      "id": "outbox_1",
+      "type": "messagebus",
+      "label": "Outbox (001)",
+      "sublabel": "signed diffs & NOTIFY",
+      "pos": [
+        930,
+        140
+      ],
+      "size": [
+        140,
+        52
+      ],
+      "tag": "Local Table"
+    },
+    {
+      "id": "db_n",
+      "type": "database",
+      "label": "Tenant DB 100",
+      "sublabel": "tenant_002..100 DBs",
+      "brand": "postgresql",
+      "pos": [
+        1130,
+        290
+      ],
+      "size": [
+        140,
+        52
+      ],
+      "tag": "Port :5432"
+    },
+    {
+      "id": "outbox_n",
+      "type": "messagebus",
+      "label": "Outbox (100)",
+      "sublabel": "signed diffs & NOTIFY",
+      "pos": [
+        930,
+        290
+      ],
+      "size": [
+        140,
+        52
+      ],
+      "tag": "Local Table"
     }
   ],
   "boundaries": [
     {
       "kind": "region",
       "label": "Aggregation & Analytics Tier",
-      "wraps": ["api", "rollupdb", "worker", "quarantine"]
+      "wraps": [
+        "api",
+        "rollupdb",
+        "worker",
+        "quarantine"
+      ]
     },
     {
       "kind": "region",
-      "label": "Tenant OLTP Tier (Port 5432)",
-      "wraps": ["db_1", "db_2", "db_n", "outbox"]
+      "label": "Tenant 001 PostgreSQL DB (:5432)",
+      "wraps": [
+        "db_1",
+        "outbox_1"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Tenant 100 PostgreSQL DB (:5432)",
+      "wraps": [
+        "db_n",
+        "outbox_n"
+      ]
     }
   ],
   "connections": [
@@ -186,48 +289,6 @@
       "toSide": "left"
     },
     {
-      "id": "conn-app-db1",
-      "from": "mainapp",
-      "to": "db_1",
-      "label": "OLTP writes",
-      "fromSide": "bottom",
-      "toSide": "top",
-      "labelAt": [1200, 122]
-    },
-    {
-      "id": "conn-db1-outbox",
-      "from": "db_1",
-      "to": "outbox",
-      "label": "triggers",
-      "variant": "emphasis",
-      "fromSide": "left",
-      "toSide": "right",
-      "labelAt": [1100, 185]
-    },
-    {
-      "id": "conn-db2-outbox",
-      "from": "db_2",
-      "to": "outbox",
-      "fromSide": "left",
-      "toSide": "right"
-    },
-    {
-      "id": "conn-dbn-outbox",
-      "from": "db_n",
-      "to": "outbox",
-      "fromSide": "left",
-      "toSide": "right"
-    },
-    {
-      "id": "conn-outbox-worker",
-      "from": "outbox",
-      "to": "worker",
-      "label": "NOTIFY + xid8",
-      "variant": "emphasis",
-      "fromSide": "left",
-      "toSide": "right"
-    },
-    {
       "id": "conn-worker-rollup",
       "from": "worker",
       "to": "rollupdb",
@@ -244,7 +305,60 @@
       "variant": "dashed",
       "fromSide": "bottom",
       "toSide": "top",
-      "labelAt": [707, 405]
+      "labelAt": [
+        707,
+        405
+      ]
+    },
+    {
+      "id": "conn-app-db1",
+      "from": "mainapp",
+      "to": "db_1",
+      "label": "OLTP writes",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        1200,
+        116
+      ]
+    },
+    {
+      "id": "conn-db1-outbox1",
+      "from": "db_1",
+      "to": "outbox_1",
+      "label": "triggers",
+      "variant": "emphasis",
+      "fromSide": "left",
+      "toSide": "right",
+      "labelAt": [
+        1100,
+        166
+      ]
+    },
+    {
+      "id": "conn-dbn-outboxn",
+      "from": "db_n",
+      "to": "outbox_n",
+      "variant": "emphasis",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "conn-outbox1-worker",
+      "from": "outbox_1",
+      "to": "worker",
+      "label": "LISTEN outbox",
+      "variant": "emphasis",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "conn-outboxn-worker",
+      "from": "outbox_n",
+      "to": "worker",
+      "variant": "emphasis",
+      "fromSide": "left",
+      "toSide": "right"
     }
   ],
   "cards": [
@@ -252,8 +366,8 @@
       "dot": "emerald",
       "title": "Event CDC Pipeline",
       "items": [
-        "Statement triggers filter writes and emit signed diffs (+1 / -1) with xid8",
-        "PostgreSQL LISTEN/NOTIFY and selectors eliminate 200ms idle polling",
+        "Each tenant DB has a dedicated local outbox table for zero cross-tenant write contention",
+        "PostgreSQL LISTEN/NOTIFY and selectors eliminate 200ms idle polling across 100 DBs",
         "Deficit Round-Robin (DRR) fairness prevents tenant starvation"
       ]
     },
