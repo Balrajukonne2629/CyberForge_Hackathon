@@ -23,6 +23,8 @@ CyberForge is a production-grade real-time analytical aggregation engine designe
 
 CyberForge addresses the challenge of real-time analytical visibility across fragmented multi-tenant architectures without compromising OLTP database performance, tenant blast-radius containment, or transactional consistency.
 
+*Tenant Model Note:* While the organiser specification defines 1M as 10 tenants and 10M as 100 tenants, CyberForge uses 100 dedicated tenant databases in both profiles (`tenant_001` .. `tenant_100`) to guarantee identical physical isolation, socket multiplexing, and fair-queuing behavior across scales without synthetic codebase branching.
+
 Key capabilities:
 - **Tenant Isolation**: 100 individual PostgreSQL databases (`tenant_001` .. `tenant_100`) on port 5432; no cross-tenant joins or queries.
 - **Transactional Outbox Triggers**: Delta changes (`delta_count`, `delta_amount`) captured on `orders` and `order_items` via statement-level triggers with early-filtering of irrelevant mutations.

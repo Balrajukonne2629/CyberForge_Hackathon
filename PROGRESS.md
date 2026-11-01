@@ -123,7 +123,7 @@ GOLDEN CHECK RESULTS: 480/480 passed. Total mismatches: 0
 ```
 
 ### Official Benchmark Comparison (`docs/BENCHMARK.md`)
-- **Query Latency p95**: 5.54ms (count), 13.29ms (trend), 6.34ms (by-status), 9.23ms (top products). Flat vs Phase 2 baseline (all `<= 15ms`, PRD Great is `<= 20ms`).
+- **Query Latency p95**: 5.54ms (count), 13.29ms (trend), 6.34ms (by-status), 9.23ms (top products). Flat vs Phase 2 baseline (all `<= 15ms`, PRD Great is `< 200ms`).
 - **Freshness Lag**: p50 120.8ms, p95 208.0ms across 50 random tenant probes (PRD Great is `<= 500ms`).
 - **Worker Cycle Time**: 10 tenants = 35.4ms, 50 tenants = 119.0ms, 100 tenants = 216.1ms (~4.6 cluster passes/sec). Idle polling cost is < 2.5% CPU, confirming no NOTIFY machinery is needed.
 - **DB Safety**: Alternating 3-round OLTP write overhead: Triggers + Worker = 16.6% drop (PRD Good: <= 20%).
