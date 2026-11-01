@@ -15,7 +15,7 @@
       {
         "id": "event-cdc-path",
         "label": "Event-Driven CDC Ingestion",
-        "focus": ["mainapp", "maindb", "outbox", "worker", "rollupdb"],
+        "focus": ["mainapp", "db_1", "db_2", "db_n", "outbox", "worker", "rollupdb"],
         "note": "Triggers early-filter writes and emit signed diffs. The worker multiplexes 100 tenant sockets with 0ms idle polling overhead."
       },
       {
@@ -65,8 +65,8 @@
       "label": "Central Rollup DB",
       "sublabel": "Hourly & Daily Rollups",
       "brand": "postgresql",
-      "pos": [630, 170],
-      "size": [180, 70],
+      "pos": [620, 170],
+      "size": [175, 70],
       "tag": "Port :5433"
     },
     {
@@ -75,8 +75,8 @@
       "label": "Event-Driven Worker",
       "sublabel": "selectors multiplex & DRR",
       "brand": "python",
-      "pos": [630, 310],
-      "size": [180, 70],
+      "pos": [620, 310],
+      "size": [175, 70],
       "tag": "0ms idle wait"
     },
     {
@@ -84,8 +84,8 @@
       "type": "security",
       "label": "Quarantine Store",
       "sublabel": "Rejected row tracking",
-      "pos": [630, 440],
-      "size": [180, 60],
+      "pos": [620, 440],
+      "size": [175, 60],
       "tag": "Fail-Closed"
     },
     {
@@ -93,27 +93,47 @@
       "type": "messagebus",
       "label": "Tenant Outbox & NOTIFY",
       "sublabel": "Signed diffs & NOTIFY",
-      "pos": [950, 380],
-      "size": [170, 70],
+      "pos": [935, 260],
+      "size": [140, 74],
       "tag": "xid8 ordered"
     },
     {
-      "id": "maindb",
+      "id": "db_1",
       "type": "database",
-      "label": "100 Tenant DBs",
-      "sublabel": "tenant_001..100 on :5432",
+      "label": "Tenant DB 001",
+      "sublabel": "tenant_001 on :5432",
       "brand": "postgresql",
-      "pos": [950, 240],
-      "size": [170, 74],
-      "tag": "Physical Isolation"
+      "pos": [1135, 150],
+      "size": [130, 52],
+      "tag": "Isolated"
+    },
+    {
+      "id": "db_2",
+      "type": "database",
+      "label": "Tenant DB 002",
+      "sublabel": "tenant_002 on :5432",
+      "brand": "postgresql",
+      "pos": [1135, 235],
+      "size": [130, 52],
+      "tag": "Isolated"
+    },
+    {
+      "id": "db_n",
+      "type": "database",
+      "label": "Tenant DB 100",
+      "sublabel": "tenant_003..100 DBs",
+      "brand": "postgresql",
+      "pos": [1135, 320],
+      "size": [130, 52],
+      "tag": "Isolated"
     },
     {
       "id": "mainapp",
       "type": "external",
       "label": "Store Clients / Sim",
       "sublabel": "Concurrent order writes",
-      "pos": [950, 110],
-      "size": [170, 64],
+      "pos": [1135, 45],
+      "size": [130, 50],
       "tag": "OLTP Mutators"
     }
   ],
@@ -126,7 +146,7 @@
     {
       "kind": "region",
       "label": "Tenant OLTP Tier (Port 5432)",
-      "wraps": ["maindb", "outbox"]
+      "wraps": ["db_1", "db_2", "db_n", "outbox"]
     }
   ],
   "connections": [
@@ -166,29 +186,43 @@
       "toSide": "left"
     },
     {
-      "id": "conn-app-maindb",
+      "id": "conn-app-db1",
       "from": "mainapp",
-      "to": "maindb",
+      "to": "db_1",
       "label": "OLTP writes",
       "fromSide": "bottom",
       "toSide": "top",
-      "labelAt": [1035, 195]
+      "labelAt": [1200, 122]
     },
     {
-      "id": "conn-maindb-outbox",
-      "from": "maindb",
+      "id": "conn-db1-outbox",
+      "from": "db_1",
       "to": "outbox",
-      "label": "filtered triggers",
+      "label": "triggers",
       "variant": "emphasis",
-      "fromSide": "bottom",
-      "toSide": "top",
-      "labelAt": [1035, 345]
+      "fromSide": "left",
+      "toSide": "right",
+      "labelAt": [1100, 185]
+    },
+    {
+      "id": "conn-db2-outbox",
+      "from": "db_2",
+      "to": "outbox",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "conn-dbn-outbox",
+      "from": "db_n",
+      "to": "outbox",
+      "fromSide": "left",
+      "toSide": "right"
     },
     {
       "id": "conn-outbox-worker",
       "from": "outbox",
       "to": "worker",
-      "label": "LISTEN/NOTIFY + xid8",
+      "label": "NOTIFY + xid8",
       "variant": "emphasis",
       "fromSide": "left",
       "toSide": "right"
@@ -210,7 +244,7 @@
       "variant": "dashed",
       "fromSide": "bottom",
       "toSide": "top",
-      "labelAt": [720, 405]
+      "labelAt": [707, 405]
     }
   ],
   "cards": [
