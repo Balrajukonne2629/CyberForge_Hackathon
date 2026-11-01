@@ -75,7 +75,8 @@ async def platform_summary(
         totals_row = await conn.fetchrow("""
             SELECT 
                 COALESCE(SUM(order_count), 0)::bigint AS order_count,
-                COALESCE(SUM(revenue), 0.00)::numeric(14,2) AS total_sales
+                COALESCE(SUM(revenue), 0.00)::numeric(14,2) AS total_sales,
+                COUNT(DISTINCT tenant_id) FILTER (WHERE order_count > 0)::bigint AS active_stores
             FROM rollup_orders_hour
             WHERE hour >= $1 AND hour < $2
         """, f_dt, t_dt)
@@ -146,7 +147,8 @@ async def platform_summary(
     return {
         "totals": {
             "order_count": int(totals_row["order_count"]),
-            "total_sales": float(totals_row["total_sales"])
+            "total_sales": float(totals_row["total_sales"]),
+            "active_stores": int(totals_row["active_stores"] or 0)
         },
         "trend": [
             {
@@ -269,12 +271,15 @@ async def admin_monitor(x_admin_key: Optional[str] = Header(None, alias="X-Admin
         """)
         quarantine_cnt = await conn.fetchval("SELECT count(*) FROM quarantine")
         
-        # Real worker telemetry from worker_telemetry table
+        # Real worker telemetry from worker_telemetry table and worker_state
         telemetry_row = await conn.fetchrow("""
             SELECT mode, start_time, last_sweep, last_loop_ms, updated_at
             FROM worker_telemetry
             ORDER BY updated_at DESC
             LIMIT 1
+        """)
+        max_state_hb = await conn.fetchval("""
+            SELECT MAX(heartbeat) FROM worker_state
         """)
 
     tenants_list = [
@@ -303,6 +308,8 @@ async def admin_monitor(x_admin_key: Optional[str] = Header(None, alias="X-Admin
     uptime_sec = None
     sweep_age_sec = None
     loop_time = None
+    heartbeat_age_sec = None
+    worker_running = False
 
     if telemetry_row:
         worker_mode = telemetry_row["mode"] or "unknown"
@@ -313,10 +320,21 @@ async def admin_monitor(x_admin_key: Optional[str] = Header(None, alias="X-Admin
         if telemetry_row["last_loop_ms"] is not None:
             loop_time = round(float(telemetry_row["last_loop_ms"]), 2)
 
+    effective_hb = telemetry_row["updated_at"] if (telemetry_row and telemetry_row["updated_at"]) else None
+    if max_state_hb:
+        if effective_hb is None or max_state_hb > effective_hb:
+            effective_hb = max_state_hb
+    if effective_hb:
+        heartbeat_age_sec = round((now_naive - effective_hb).total_seconds(), 1)
+        worker_running = (heartbeat_age_sec <= 15.0)
+
     changes_waiting = sum(1 for lag in all_lags if lag > 0.0)
 
     return {
         "worker_mode": worker_mode,
+        "worker_running": worker_running,
+        "worker_stale": not worker_running,
+        "heartbeat_age_seconds": heartbeat_age_sec,
         "worker": {
             "mode": worker_mode,
             "uptime_seconds": uptime_sec,

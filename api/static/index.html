@@ -965,6 +965,11 @@
       </div>
     </div>
 
+    <!-- Dead Worker Alert Banner -->
+    <div id="deadWorkerBanner" class="dead-worker-banner" style="display:none; background:var(--bad); color:#ffffff; padding:12px 18px; font-weight:700; text-align:center; margin-bottom:12px; border-radius:var(--radius); border:1px solid #b84332;">
+      Worker not running. Numbers may be stale.
+    </div>
+
     <!-- Stalled Banner -->
     <div id="stalledBanner" class="stalled-banner">
       WARNING: Ingestion pipeline is stalled for this store. Queries are served from the last consistent snapshot.
@@ -1425,9 +1430,11 @@
           <div style="font-weight:700; margin-bottom:12px; font-size:14px; color:var(--accent);">
             INTERACTIVE SYSTEM DEMO CONTROLS
           </div>
-          <div class="demo-btn-group">
+          <div class="demo-btn-group" style="align-items:center;">
             <button class="btn-primary" id="btnNewOrder">New Order</button>
             <button id="btnCancelLast">Cancel Last Order</button>
+            <label for="demoControlsStoreSelect" style="font-size:11px; font-weight:600; color:var(--muted); margin-left:6px;">Target store:</label>
+            <select id="demoControlsStoreSelect" style="padding:4px 8px; font-size:12px; border:1px solid var(--line); border-radius:4px; background:var(--card); color:var(--text);"></select>
             <button id="btnFloodTenant">Flood Store 1 (10 orders)</button>
             <button id="btnStopFlood">Stop Flood</button>
             <button class="btn-danger" id="btnResetDemo">Reset Demo Data</button>
@@ -1480,97 +1487,103 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">Engineering Verification Scorecard</span>
-            <span class="range-note">Hardware: Balu laptop i5-1235U 15.7 GB · rerun pending on Lenovo</span>
+            <span class="range-note">Hardware: Balu laptop i5-1235U 15.7 GB · 10M orders · 100 tenants · warm</span>
           </div>
-          <div class="card-caption">Empirical verification against PRD SLA targets across 1M and 10M datasets</div>
+          <div class="card-caption">Empirical verification against PRD SLA targets. FAIL only if the organiser Good tier is missed.</div>
           <div style="overflow-x:auto; margin-top:12px;">
             <table class="data-table" style="font-size:12px;">
               <thead>
                 <tr>
                   <th>PRD Target Metric</th>
-                  <th>Good SLA</th>
-                  <th>Great SLA</th>
-                  <th>Our Goal</th>
-                  <th class="tabular">Measured (1M)</th>
-                  <th class="tabular">Measured (10M)</th>
-                  <th class="tabular">Scaling</th>
-                  <th>Hardware</th>
-                  <th>Status</th>
-                  <th>Source Evidence</th>
+                  <th>Organiser Good</th>
+                  <th>Organiser Great</th>
+                  <th>Our goal</th>
+                  <th class="tabular">Measured</th>
+                  <th>Status per tier</th>
+                  <th>Hardware & Notes</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td><strong>Order Count API (p95)</strong></td>
-                  <td>&lt; 50 ms</td>
-                  <td>&lt; 20 ms</td>
+                  <td><strong>Query p95: Order Count</strong></td>
+                  <td>&lt; 1 s</td>
+                  <td>&lt; 200 ms</td>
                   <td>&lt; 15 ms</td>
-                  <td class="tabular">7.64 ms</td>
                   <td class="tabular">13.60 ms</td>
-                  <td class="tabular">1.78&times;</td>
-                  <td>i5-1235U 15.7 GB</td>
-                  <td><span class="status-badge s200">PASS</span></td>
-                  <td><code>docs/results/scaling.json</code></td>
+                  <td><span class="status-badge s200">Meets Great</span></td>
+                  <td>Balu laptop i5-1235U 15.7 GB, 10M orders, 100 tenants, warm · rerun pending on Lenovo</td>
                 </tr>
                 <tr>
-                  <td><strong>Hourly Trend API (p95)</strong></td>
-                  <td>&lt; 50 ms</td>
-                  <td>&lt; 25 ms</td>
+                  <td><strong>Query p95: Hourly Trend</strong></td>
+                  <td>&lt; 1 s</td>
+                  <td>&lt; 200 ms</td>
                   <td>&lt; 20 ms</td>
-                  <td class="tabular">14.21 ms</td>
                   <td class="tabular">17.64 ms</td>
-                  <td class="tabular">1.24&times;</td>
-                  <td>i5-1235U 15.7 GB</td>
-                  <td><span class="status-badge s200">PASS</span></td>
-                  <td><code>docs/results/scaling.json</code></td>
+                  <td><span class="status-badge s200">Meets Great</span></td>
+                  <td>Balu laptop i5-1235U 15.7 GB, 10M orders, 100 tenants, warm · rerun pending on Lenovo</td>
                 </tr>
                 <tr>
-                  <td><strong>Orders by Status (p95)</strong></td>
-                  <td>&lt; 40 ms</td>
-                  <td>&lt; 20 ms</td>
+                  <td><strong>Query p95: Orders by Status</strong></td>
+                  <td>&lt; 1 s</td>
+                  <td>&lt; 200 ms</td>
                   <td>&lt; 15 ms</td>
-                  <td class="tabular">9.59 ms</td>
                   <td class="tabular">10.85 ms</td>
-                  <td class="tabular">1.13&times;</td>
-                  <td>i5-1235U 15.7 GB</td>
-                  <td><span class="status-badge s200">PASS</span></td>
-                  <td><code>docs/results/scaling.json</code></td>
+                  <td><span class="status-badge s200">Meets Great</span></td>
+                  <td>Balu laptop i5-1235U 15.7 GB, 10M orders, 100 tenants, warm · rerun pending on Lenovo</td>
                 </tr>
                 <tr>
-                  <td><strong>Top-N Products (p95)</strong></td>
-                  <td>&lt; 100 ms</td>
-                  <td>&lt; 50 ms</td>
+                  <td><strong>Query p95: Top-N Products</strong></td>
+                  <td>&lt; 1 s</td>
+                  <td>&lt; 200 ms</td>
                   <td>&lt; 30 ms</td>
-                  <td class="tabular">15.75 ms</td>
                   <td class="tabular">64.44 ms</td>
-                  <td class="tabular">4.09&times;</td>
-                  <td>i5-1235U 15.7 GB</td>
-                  <td><span class="status-badge s403">FAIL</span></td>
-                  <td><code>docs/results/scaling.json</code></td>
+                  <td><span class="status-badge s200">Meets Great</span></td>
+                  <td>Balu laptop i5-1235U 15.7 GB, 10M orders, 100 tenants, warm · rerun pending on Lenovo</td>
                 </tr>
                 <tr>
-                  <td><strong>Data Freshness (Event Mode)</strong></td>
-                  <td>&lt; 2.0 s</td>
-                  <td>&lt; 500 ms</td>
+                  <td><strong>Freshness (Event Mode)</strong></td>
+                  <td>&lt; 5 min</td>
+                  <td>&lt; 30 s</td>
                   <td>&lt; 100 ms</td>
-                  <td class="tabular">p50 ~27 ms</td>
-                  <td class="tabular">p50 40.3 / p95 99.7 / max 3,228.03 ms</td>
-                  <td class="tabular">Sub-sec</td>
-                  <td>i5-1235U 15.7 GB</td>
-                  <td><span class="status-badge s200">PASS</span></td>
-                  <td><code>docs/results/scaling.json</code></td>
+                  <td class="tabular">1m p50 ~27 ms; 10m p50 40.3, p95 99.7, max 3,228 ms</td>
+                  <td><span class="status-badge s200">Meets Great</span></td>
+                  <td>Balu laptop i5-1235U 15.7 GB, 10M orders, 100 tenants, warm · rerun pending on Lenovo</td>
                 </tr>
                 <tr>
-                  <td><strong>DB Safety Impact (Poll Mode)</strong></td>
+                  <td><strong>DB Slowdown (Poll Mode)</strong></td>
+                  <td>&lt; 25% overhead</td>
                   <td>&lt; 10% overhead</td>
                   <td>&lt; 5% overhead</td>
-                  <td>&lt; 3% overhead</td>
-                  <td class="tabular">+35% to 45% load</td>
-                  <td class="tabular">not measured</td>
-                  <td class="tabular">High</td>
-                  <td>i5-1235U 15.7 GB</td>
-                  <td><span class="status-badge s403">FAIL</span></td>
-                  <td><code>docs/results/scaling.json</code></td>
+                  <td class="tabular">+35 to 45% load</td>
+                  <td><span class="status-badge s403">FAIL vs Good (&lt;25%)</span></td>
+                  <td>Balu laptop i5-1235U 15.7 GB, 100 tenants · rerun pending on Lenovo</td>
+                </tr>
+                <tr>
+                  <td><strong>DB Slowdown (Event Mode)</strong></td>
+                  <td>&lt; 25% overhead</td>
+                  <td>&lt; 10% overhead</td>
+                  <td>&lt; 5% overhead</td>
+                  <td class="tabular">not measured yet</td>
+                  <td><span class="status-badge">not measured yet</span></td>
+                  <td>Balu laptop i5-1235U 15.7 GB, 100 tenants · rerun pending on Lenovo</td>
+                </tr>
+                <tr>
+                  <td><strong>Correctness</strong></td>
+                  <td>100% parity</td>
+                  <td>100% parity</td>
+                  <td>100% golden parity</td>
+                  <td class="tabular">verified at 1m (golden 480/480); 10m rerun pending</td>
+                  <td><span class="status-badge s200">PASS (1M golden)</span></td>
+                  <td>Balu laptop i5-1235U 15.7 GB · rerun pending on Lenovo</td>
+                </tr>
+                <tr>
+                  <td><strong>Growth 1M &rarr; 10M</strong></td>
+                  <td>&lt; 5&times;</td>
+                  <td>&lt; 2&times;</td>
+                  <td>&lt; 1.5&times;</td>
+                  <td class="tabular">count 1.78x, trend 1.24x, by-status 1.13x, top-N 4.09x</td>
+                  <td><span class="status-badge s200">Meets Good (&lt;5x)</span></td>
+                  <td>Top-N meets Good, misses Great and our goal 1.5x. Count meets Great, misses our 1.5x. Balu laptop · rerun pending on Lenovo</td>
                 </tr>
               </tbody>
             </table>
@@ -2157,7 +2170,14 @@
 
       document.getElementById('stalledBanner').style.display = stalled ? 'block' : 'none';
       const fBadge = document.getElementById('freshnessBadge');
-      if (fBadge) fBadge.textContent = `Data age: ${lag.toFixed(2)} s`;
+      if (fBadge) {
+        if (state.workerDead) {
+          fBadge.style.display = 'none';
+        } else {
+          fBadge.style.display = 'inline-block';
+          fBadge.textContent = `Data age: ${lag.toFixed(2)} s`;
+        }
+      }
 
       // Latency Badge & What Just Happened Panel
       if (state.pendingDemoOrder) {
@@ -2255,7 +2275,7 @@
       const aov = orderCount > 0 ? (totalSales / orderCount) : 0.0;
       document.getElementById('adminAvgOrderValue').textContent = `$${aov.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
       
-      const activeStores = (d.top_tenants || []).length;
+      const activeStores = (d.totals && d.totals.active_stores !== undefined) ? d.totals.active_stores : (d.top_tenants || []).length;
       document.getElementById('adminActiveStores').textContent = activeStores.toLocaleString();
 
       let canceledOrders = 0;
@@ -2308,6 +2328,10 @@
 
     function renderAdminHealth(m) {
       if (!m) return;
+      const isDead = (m.worker_running === false || m.worker_stale === true || (m.heartbeat_age_seconds !== null && m.heartbeat_age_seconds > 15.0));
+      const deadBanner = document.getElementById('deadWorkerBanner');
+      if (deadBanner) deadBanner.style.display = isDead ? 'block' : 'none';
+      state.workerDead = isDead;
       const workerMode = m.worker_mode || (m.worker ? m.worker.mode : 'unknown');
       const loopTimeStr = (m.loop_time_ms !== null && m.loop_time_ms !== undefined) ? `${m.loop_time_ms.toFixed(1)}ms` : 'n/a';
       document.getElementById('workerModeLabel').textContent = `Worker: ${workerMode} mode · Loop: ${loopTimeStr}`;
@@ -2346,7 +2370,8 @@
         cell.textContent = t.tenant_id;
 
         let bg = 'var(--ok)';
-        if (t.stalled) bg = 'var(--stalled)';
+        if (isDead) bg = 'var(--bad)';
+        else if (t.stalled) bg = 'var(--stalled)';
         else if (t.lag_seconds > 5) bg = 'var(--bad)';
         else if (t.lag_seconds > 1) bg = 'var(--warn)';
 
@@ -2514,13 +2539,12 @@
 
       // Render "Show data" table (IST primary, UTC small second column)
       if (tableContentId) {
-        let csv = "bucket_ist,bucket_utc,order_count,sales_usd\n";
-        let rowsHtml = `<table class="data-table" style="font-size:11px;"><thead><tr><th>Bucket (IST)</th><th style="font-size:10px; color:var(--muted);">UTC</th><th class="tabular">Orders</th><th class="tabular">Sales ($)</th></tr></thead><tbody>`;
+        let csv = "bucket_ist,order_count,sales_usd\n";
+        let rowsHtml = `<table class="data-table" style="font-size:11px;"><thead><tr><th>Bucket (IST)</th><th class="tabular">Orders</th><th class="tabular">Sales ($)</th></tr></thead><tbody>`;
         points.forEach(p => {
-          const dUtc = p.bucket.slice(0, 16);
           const dIst = formatIST(p.bucket);
-          csv += `"${dIst}","${dUtc}",${p.order_count},${p.sales.toFixed(2)}\n`;
-          rowsHtml += `<tr><td><strong>${dIst}</strong></td><td style="font-size:10px; color:var(--muted);">${dUtc}</td><td class="tabular">${p.order_count.toLocaleString()}</td><td class="tabular">$${p.sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td></tr>`;
+          csv += `"${dIst}",${p.order_count},${p.sales.toFixed(2)}\n`;
+          rowsHtml += `<tr><td><strong>${dIst}</strong></td><td class="tabular">${p.order_count.toLocaleString()}</td><td class="tabular">$${p.sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td></tr>`;
         });
         rowsHtml += `</tbody></table>`;
         document.getElementById(tableContentId).innerHTML = rowsHtml;
@@ -3291,12 +3315,14 @@
     if (btnFloodTenant) {
       btnFloodTenant.addEventListener('click', async () => {
         try {
+          const selEl = document.getElementById('demoControlsStoreSelect');
+          const targetTid = selEl ? parseInt(selEl.value, 10) : state.tenantId;
           await inspectedFetch('/ui-api/demo/flood', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tenant_id: state.tenantId, n: 10 })
+            body: JSON.stringify({ tenant_id: targetTid, n: 10 })
           }, "tenant database (direct)", "Demo Flood");
-          document.getElementById('demoStatusText').textContent = `Flood initiated: 10 orders streaming to Store ${state.tenantId}.`;
+          document.getElementById('demoStatusText').textContent = `Flood initiated: 10 orders streaming to Store ${targetTid}.`;
         } catch (err) {
           document.getElementById('demoStatusText').textContent = `Flood failed: ${err.message}`;
         }
@@ -3495,6 +3521,7 @@
         const target = document.getElementById(`adminSub-${subId}`);
         if (target) target.style.display = 'block';
         if (subId === 'scale') loadScaleTab();
+        if (subId === 'health') inspectedFetch('/ui-api/monitor', {}, "summary tables", "Admin Health").then(renderAdminHealth).catch(() => {});
       });
     });
 

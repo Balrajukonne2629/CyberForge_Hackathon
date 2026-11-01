@@ -71,18 +71,18 @@ async def demo_order(
 
     conn = await asyncpg.connect(db_url)
     try:
-        # Determine next demo order_id (in 900,000,000+ range)
+        # Determine next demo order_id (in dashboard demo range 900,000,000 - 949,999,999)
         max_oid = await conn.fetchval("""
             SELECT COALESCE(MAX(order_id), 900000000)
             FROM orders
-            WHERE order_id >= 900000000
+            WHERE order_id >= 900000000 AND order_id < 950000000
         """)
         next_oid = max_oid + 1
 
         max_iid = await conn.fetchval("""
             SELECT COALESCE(MAX(item_id), 900000000)
             FROM order_items
-            WHERE item_id >= 900000000
+            WHERE item_id >= 900000000 AND item_id < 950000000
         """)
         next_iid = max_iid + 1
 
@@ -142,7 +142,7 @@ async def demo_cancel(
     try:
         row = await conn.fetchrow("""
             SELECT order_id FROM orders
-            WHERE tenant_id = $1 AND order_id >= 900000000 AND status != 'canceled'
+            WHERE tenant_id = $1 AND order_id >= 900000000 AND order_id < 950000000 AND status != 'canceled'
             ORDER BY order_id DESC LIMIT 1
         """, req.tenant_id)
 
@@ -195,11 +195,11 @@ async def _flood_worker(tenant_id: int, n: int, stop_ev: asyncio.Event):
             batch_size = min(10, n - sent)
             max_oid = await conn.fetchval("""
                 SELECT COALESCE(MAX(order_id), 900000000)
-                FROM orders WHERE order_id >= 900000000
+                FROM orders WHERE order_id >= 900000000 AND order_id < 950000000
             """)
             max_iid = await conn.fetchval("""
                 SELECT COALESCE(MAX(item_id), 900000000)
-                FROM order_items WHERE item_id >= 900000000
+                FROM order_items WHERE item_id >= 900000000 AND item_id < 950000000
             """)
 
             now_utc = datetime.datetime.now(datetime.timezone.utc)
@@ -291,13 +291,19 @@ async def demo_naive(
     profile = os.getenv("PROFILE", "1m")
     cfg = get_config(profile)
     
-    # If tenant_id == 0, find biggest store by order count
+    # If tenant_id <= 0, query rollups dynamically for biggest store by order count
     actual_tid = tenant_id if tenant_id > 0 else 1
     if tenant_id <= 0:
-        # Check rollups for biggest store
         try:
-            r_pool = await asyncpg.connect(get_tenant_db_url(1, profile).replace("tenant_001", "rollup_1m").replace(":5432/", ":5433/"))
-            biggest_row = await r_pool.fetchrow("SELECT tenant_id, SUM(order_count) as c FROM rollup_orders_hour GROUP BY tenant_id ORDER BY c DESC LIMIT 1")
+            r_url = cfg["database"]["rollup_db_url"]
+            r_pool = await asyncpg.connect(r_url)
+            biggest_row = await r_pool.fetchrow("""
+                SELECT tenant_id, SUM(order_count) as c 
+                FROM rollup_orders_hour 
+                GROUP BY tenant_id 
+                ORDER BY c DESC 
+                LIMIT 1
+            """)
             if biggest_row:
                 actual_tid = int(biggest_row["tenant_id"])
             await r_pool.close()
@@ -389,8 +395,7 @@ async def demo_naive(
         rollup_times = []
         rollup_conn = None
         try:
-            r_cfg = cfg.get("databases", {}).get("rollup", {})
-            r_url = f"postgresql://{r_cfg.get('user','postgres')}:{r_cfg.get('password','postgres')}@{r_cfg.get('host','127.0.0.1')}:{r_cfg.get('port',5433)}/{r_cfg.get('dbname','rollup_1m')}"
+            r_url = cfg["database"]["rollup_db_url"]
             rollup_conn = await asyncpg.connect(r_url)
             r_sql = """
                 SELECT product_id, category, SUM(units)::bigint as units, SUM(sales)::numeric(14,2) as sales
@@ -448,8 +453,8 @@ async def demo_reset(
         conn = None
         try:
             conn = await asyncpg.connect(db_url)
-            del_items = await conn.execute("DELETE FROM order_items WHERE order_id >= 900000000")
-            del_orders = await conn.execute("DELETE FROM orders WHERE order_id >= 900000000")
+            del_items = await conn.execute("DELETE FROM order_items WHERE order_id >= 900000000 AND order_id < 950000000")
+            del_orders = await conn.execute("DELETE FROM orders WHERE order_id >= 900000000 AND order_id < 950000000")
             # Parse count from 'DELETE <n>'
             if del_items.startswith("DELETE "):
                 deleted_items += int(del_items.split(" ")[1])
