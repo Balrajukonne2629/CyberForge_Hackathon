@@ -77,7 +77,7 @@ python scripts/setup.py --profile 1m
 python scripts/setup.py --profile 10m
 ```
 
-Clean-clone check (commit 31661b8, 1M profile, one laptop i5-1235U 15.7 GB Windows 11): pip 66.6 s, setup 92.7 s, smoke 13/13, full suite 15/15 in 157 s, golden 480/480, tripwire 1,000,000 orders / 1,141,449 items. 10M full suite: rerun pending.
+Clean-clone check (commit 182b518, 1M profile, one laptop i5-1235U 15.7 GB Windows 11): clone 2.7 s, setup 93.2 s, smoke 13/13 in 58.9 s, full suite 15/15 in 139 s, golden 480/480, tripwire 1,000,000 orders / 1,141,449 items. 10M full suite: rerun pending.
 
 ---
 
