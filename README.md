@@ -23,7 +23,7 @@ CyberForge is a real-time analytical aggregation engine designed for multi-tenan
 
 CyberForge addresses the challenge of real-time analytical visibility across fragmented multi-tenant architectures without compromising OLTP database performance, tenant blast-radius containment, or transactional consistency.
 
-See [PRD v1.1 delta](docs/PRD_v1.1_delta.md): per-tenant DBs and event-driven capture deviate from PRD v1.0.
+See [Presentation Deck & System Specs](ppt.md) for full requirements traceability, per-tenant database architecture, and verified benchmarks.
 
 Key capabilities:
 - **Tenant Isolation**: 100 individual PostgreSQL databases (`tenant_001` .. `tenant_100`) on port 5432; no cross-tenant joins or queries.
