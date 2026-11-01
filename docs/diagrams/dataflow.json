@@ -2,7 +2,7 @@
   "schema_version": 1,
   "diagram_type": "dataflow",
   "meta": {
-    "title": "Multi-Tenant Data Pipeline & Aggregation Flow",
+    "title": "CyberForge Event-Driven Data Pipeline & Aggregation Flow",
     "output": "docs/diagrams/dataflow.html",
     "viewBox": [1080, 510],
     "quality_profile": "showcase",
@@ -10,30 +10,30 @@
     "views": [
       {
         "id": "ingest-pipeline",
-        "label": "CDC Ingestion Pipeline",
+        "label": "Event-Driven CDC Pipeline",
         "focus": ["client_app", "simulator", "main_oltp", "outbox_log", "worker_engine", "rollup_orders", "rollup_products"],
-        "note": "Mutations to the main OLTP database emit signed diffs via AFTER triggers; the worker batches and folds into rollups."
+        "note": "Mutations to tenant DBs emit signed diffs via triggers; worker multiplexes 100 tenant sockets and folds in memory."
       },
       {
         "id": "serving-pipeline",
-        "label": "Tenant Query Serving",
+        "label": "Analytical Serving & Live SSE",
         "focus": ["rollup_orders", "rollup_products", "fastapi_gateway", "store_dashboards"],
-        "note": "Tenant dashboard queries are answered exclusively from rollups in sub-100ms without touching the OLTP store."
+        "note": "Rollup updates trigger SSE pushes to dashboards; analytical queries are served sub-10ms without touching tenant DBs."
       },
       {
         "id": "quarantine-pipeline",
-        "label": "Quarantine & Isolation",
+        "label": "Quarantine & Safety Guard",
         "focus": ["worker_engine", "quarantine_store"],
-        "note": "Malformed records or check constraint violations are safely isolated without halting the main pipeline."
+        "note": "Violating or malformed rows are isolated into quarantine without blocking the CDC pipeline or corrupting rollups."
       }
     ]
   },
   "stages": [
     { "label": "Data Sources" },
-    { "label": "OLTP Capture" },
-    { "label": "Processing" },
-    { "label": "Rollup Storage" },
-    { "label": "Consumers" }
+    { "label": "Tenant Capture" },
+    { "label": "Worker Multiplex" },
+    { "label": "Rollup Tier" },
+    { "label": "Serving & SSE" }
   ],
   "nodes": [
     {
@@ -51,7 +51,7 @@
       "id": "simulator",
       "type": "external",
       "label": "Simulator",
-      "sublabel": "Load & Updates",
+      "sublabel": "Load & Bursts",
       "width": 130,
       "stage": 0,
       "row": 2,
@@ -60,18 +60,18 @@
     {
       "id": "main_oltp",
       "type": "database",
-      "label": "Main OLTP DB",
-      "sublabel": "PostgreSQL 16",
+      "label": "100 Tenant DBs",
+      "sublabel": "tenant_001..100",
       "brand": "postgresql",
       "width": 130,
       "stage": 1,
       "row": 1,
-      "tag": "10M orders"
+      "tag": "isolated"
     },
     {
       "id": "outbox_log",
       "type": "messagebus",
-      "label": "Outbox Buffer",
+      "label": "Outbox & NOTIFY",
       "sublabel": "Signed Diffs (+1/-1)",
       "width": 130,
       "stage": 1,
@@ -82,12 +82,12 @@
       "id": "worker_engine",
       "type": "backend",
       "label": "CDC Worker",
-      "sublabel": "In-Memory Fold",
-      "brand": "docker",
+      "sublabel": "selectors & DRR",
+      "brand": "python",
       "width": 130,
       "stage": 2,
       "row": 1,
-      "tag": "safe snapshot"
+      "tag": "0ms idle wait"
     },
     {
       "id": "quarantine_store",
@@ -124,8 +124,8 @@
     {
       "id": "fastapi_gateway",
       "type": "backend",
-      "label": "FastAPI Service",
-      "sublabel": "Auth & Rate Limit",
+      "label": "FastAPI Gateway",
+      "sublabel": "Auth & Concurrency",
       "brand": "fastapi",
       "width": 130,
       "stage": 4,
@@ -135,8 +135,8 @@
     {
       "id": "store_dashboards",
       "type": "frontend",
-      "label": "Store Dashboards",
-      "sublabel": "p95 < 100ms",
+      "label": "Dashboards & SSE",
+      "sublabel": "p95 < 10ms",
       "width": 130,
       "stage": 4,
       "row": 2,
@@ -164,7 +164,7 @@
       "id": "flow-trigger-outbox",
       "from": "main_oltp",
       "to": "outbox_log",
-      "label": "AFTER triggers",
+      "label": "filtered triggers",
       "classification": "signed diffs",
       "variant": "emphasis",
       "labelAt": [315, 314]
@@ -173,7 +173,7 @@
       "id": "flow-batch-worker",
       "from": "outbox_log",
       "to": "worker_engine",
-      "label": "safe-xid batch",
+      "label": "LISTEN/NOTIFY batch",
       "classification": "pg_snapshot_xmin",
       "variant": "emphasis"
     },
@@ -233,7 +233,7 @@
       "id": "flow-api-dash",
       "from": "fastapi_gateway",
       "to": "store_dashboards",
-      "label": "fresh analytics",
+      "label": "p95 < 10ms + SSE",
       "classification": "served response",
       "variant": "emphasis",
       "fromSide": "bottom",
@@ -244,29 +244,29 @@
   "cards": [
     {
       "dot": "emerald",
-      "title": "CDC Ingestion Flow",
+      "title": "Event CDC Ingest",
       "items": [
-        "Store clients commit transactions directly to PostgreSQL OLTP without latency overhead",
-        "Statement-level AFTER triggers write signed diff rows (+1 / -1) with xid8 transaction IDs",
-        "CDC Worker reads batches below pg_snapshot_xmin to guarantee cross-transaction consistency"
+        "Statement triggers filter writes and emit signed diffs (+1 / -1) with xid8",
+        "PostgreSQL LISTEN/NOTIFY and selectors eliminate 200ms idle polling",
+        "Deficit Round-Robin (DRR) fairness prevents tenant starvation"
       ]
     },
     {
       "dot": "cyan",
-      "title": "In-Memory Fold & Rollup Storage",
+      "title": "In-Memory Rollups",
       "items": [
-        "Worker folds batch records in memory into a single upsert per dimension key",
-        "Rollup tables maintain hourly order status counts and daily product sales rollups",
-        "Fail-closed CHECK constraints safeguard counter sanity and quarantine rejects"
+        "CDC worker folds batch records in memory into a single upsert per bucket",
+        "Rollups maintain hourly orders and daily product sales with check constraints",
+        "Malformed or violating rows isolate safely into quarantine"
       ]
     },
     {
       "dot": "rose",
-      "title": "High-Performance Read Flow",
+      "title": "Serving & Live SSE",
       "items": [
-        "FastAPI enforces tenant isolation via X-Tenant-Key on every dashboard metric query",
-        "Aggregation queries scan compact pre-aggregated rows instead of 10M raw rows",
-        "P95 query response time stays under 100ms with zero contention on primary OLTP"
+        "FastAPI enforces tenant isolation and 32-concurrency limits",
+        "Rollup changes fire NOTIFY, streaming live SSE updates in <40ms",
+        "Analytical queries achieve p95 < 10ms with zero OLTP contention"
       ]
     }
   ]
