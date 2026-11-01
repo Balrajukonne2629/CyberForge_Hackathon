@@ -25,8 +25,8 @@ ROLLUP_DB_URL = cfg["database"]["rollup_db_url"]
 ADMIN_KEY = cfg.get("auth", {}).get("admin_key", "admin-secret-key-12345")
 
 # B-3 Concurrency Limit configuration
-PER_TENANT_LIMIT = int(cfg.get("concurrency", {}).get("per_tenant_limit", 8))
-QUEUE_TIMEOUT_SEC = float(cfg.get("concurrency", {}).get("queue_timeout_seconds", 0.0))
+PER_TENANT_LIMIT = int(cfg.get("concurrency", {}).get("per_tenant_limit", 32))
+QUEUE_TIMEOUT_SEC = float(cfg.get("concurrency", {}).get("queue_timeout_seconds", 1.0))
 tenant_semaphores: Dict[int, asyncio.Semaphore] = {}
 
 # B-5 Telemetry Ring Buffer (last 60s) and Request Counters
@@ -41,7 +41,7 @@ def record_request_metric(endpoint: str, latency_ms: float, is_429: bool = False
     request_counters["total_requests"] += 1
     if is_429:
         request_counters["count_429"] += 1
-    metrics_ring_buffer.append((now, endpoint, latency_ms))
+    metrics_ring_buffer.append((now, endpoint, latency_ms, is_429))
 
 @asynccontextmanager
 async def tenant_concurrency_guard(tenant_id: int, endpoint: str):
@@ -285,7 +285,7 @@ async def get_admin_monitor(x_admin_key: Optional[str] = Header(None, alias="X-A
         """)
 
         w_row = await conn.fetchrow("""
-            SELECT mode, start_time, last_sweep, last_loop_ms 
+            SELECT mode, start_time, last_sweep, last_loop_ms, updated_at 
             FROM worker_telemetry 
             WHERE worker_id = 0
         """)
@@ -294,23 +294,47 @@ async def get_admin_monitor(x_admin_key: Optional[str] = Header(None, alias="X-A
     recent = [m for m in metrics_ring_buffer if m[0] >= cutoff]
     endpoint_data = {}
     for ep in ["/orders/count", "/orders/trend", "/orders/by-status", "/products/top"]:
-        lats = [m[2] for m in recent if m[1] == ep]
-        if lats:
+        lats_200 = [m[2] for m in recent if m[1] == ep and not m[3]]
+        calls_429 = len([m for m in recent if m[1] == ep and m[3]])
+        calls_200 = len(lats_200)
+        calls_total = calls_200 + calls_429
+        if lats_200:
             endpoint_data[ep] = {
-                "p50_ms": round(float(np.percentile(lats, 50)), 2),
-                "p95_ms": round(float(np.percentile(lats, 95)), 2),
-                "calls_60s": len(lats)
+                "p50_ms": round(float(np.percentile(lats_200, 50)), 2),
+                "p95_ms": round(float(np.percentile(lats_200, 95)), 2),
+                "calls_200": calls_200,
+                "calls_429": calls_429,
+                "calls_60s": calls_total
             }
         else:
-            endpoint_data[ep] = {"p50_ms": 0.0, "p95_ms": 0.0, "calls_60s": 0}
+            endpoint_data[ep] = {
+                "p50_ms": 0.0,
+                "p95_ms": 0.0,
+                "calls_200": 0,
+                "calls_429": calls_429,
+                "calls_60s": calls_total
+            }
+
+    def to_utc_ts(dt: Optional[datetime.datetime]) -> Optional[float]:
+        if not dt:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=datetime.timezone.utc).timestamp()
+        return dt.timestamp()
 
     if w_row:
-        uptime = max(0.0, round(now_ts - w_row["start_time"].timestamp(), 1))
-        sweep_age = max(0.0, round(now_ts - w_row["last_sweep"].timestamp(), 2))
+        up_ts = to_utc_ts(w_row["updated_at"])
+        st_ts = to_utc_ts(w_row["start_time"])
+        sw_ts = to_utc_ts(w_row["last_sweep"])
+        hb_age = max(0.0, now_ts - up_ts) if up_ts else 999.0
+        worker_alive = (hb_age <= 15.0)
+        uptime = max(0.0, round(now_ts - st_ts, 1)) if (worker_alive and st_ts) else None
+        sweep_age = max(0.0, round(now_ts - sw_ts, 2)) if sw_ts else 0.0
         loop_ms = float(w_row["last_loop_ms"] or 0.0)
         mode = w_row["mode"]
     else:
-        uptime = 0.0
+        worker_alive = False
+        uptime = None
         sweep_age = 0.0
         loop_ms = 0.0
         mode = cfg.get("worker", {}).get("mode", "event")
@@ -329,6 +353,7 @@ async def get_admin_monitor(x_admin_key: Optional[str] = Header(None, alias="X-A
         ],
         "endpoints": endpoint_data,
         "worker": {
+            "worker_alive": worker_alive,
             "mode": mode,
             "uptime_seconds": uptime,
             "safety_sweep_age_seconds": sweep_age,

@@ -132,12 +132,16 @@ def run_sse_push_test(profile: str = "1m", probes: int = 50):
     max_lat = float(np.max(latencies_ms))
     avg = float(np.mean(latencies_ms))
 
+    n_samples = len(latencies_ms)
     print("\n" + "=" * 70)
-    print("COMMIT-TO-SSE RECEIVE LATENCY RESULTS (50 PROBES):")
+    print(f"COMMIT-TO-SSE RECEIVE LATENCY RESULTS ({probes} PROBES):")
     print(f"  Clock source: time.perf_counter() monotonic server/client clock")
-    print(f"  Completed probes : {len(latencies_ms)}/{probes}")
+    print(f"  Completed probes : {n_samples}/{probes}")
     print(f"  p50 Latency      : {p50:.2f} ms")
-    print(f"  p95 Latency      : {p95:.2f} ms")
+    if n_samples < 20:
+        print(f"  max of {n_samples} Latency : {max_lat:.2f} ms")
+    else:
+        print(f"  p95 Latency      : {p95:.2f} ms")
     print(f"  Max Latency      : {max_lat:.2f} ms")
     print(f"  Mean Latency     : {avg:.2f} ms")
     print("=" * 70)

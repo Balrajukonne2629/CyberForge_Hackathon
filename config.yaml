@@ -138,5 +138,5 @@ auth:
   key_prefix: "tenant-key-"
 
 concurrency:
-  per_tenant_limit: 8
-  queue_timeout_seconds: 0.0
+  per_tenant_limit: 32
+  queue_timeout_seconds: 1.0
