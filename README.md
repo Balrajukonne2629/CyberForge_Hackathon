@@ -8,6 +8,7 @@ CyberForge is a production-grade real-time analytical aggregation engine designe
 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
 - [One-Command Setup](#one-command-setup)
 - [Start Commands](#start-commands)
 - [API Reference & curl Examples](#api-reference--curl-examples)
@@ -41,6 +42,21 @@ Key capabilities:
 
 ---
 
+## Quick Start
+
+### 1. Clone Repository
+```bash
+git clone https://github.com/Balrajukonne2629/CyberForge_Hackathon.git
+cd "CyberForge Project"
+```
+
+### 2. Dataset Placement
+Place the dataset in either of the following locations:
+- Archive: `data/mitigata_dataset.zip` (or set environment variable `DATASET_ZIP=/path/to/archive.zip`)
+- Extracted directory: `data/mitigata_dataset/` containing `schema.sql`, `small/` (1M dataset), and `main/` (10M dataset).
+
+---
+
 ## One-Command Setup
 
 The setup orchestrates container initialization, schema deployment, data splitting across 100 tenant databases, trigger installation, initial rollup population, and verification.
@@ -65,12 +81,28 @@ docker compose up -d
 - Central Rollup database: `127.0.0.1:5433` (`rollup_1m`, `rollup_10m`)
 
 ### 2. Start Multi-Tenant Worker Daemon
+Supports configuration via CLI flags or `PROFILE` and `WORKER_MODE` environment variables (`PROFILE` defaults to `1m`, `WORKER_MODE` defaults to `event`):
+
 ```powershell
+# Using CLI flags:
 py -3.12 worker/worker.py --profile 1m --mode event
+
+# Or using environment variables:
+$env:PROFILE="1m"
+$env:WORKER_MODE="event"
+py -3.12 worker/worker.py
 ```
 
 ### 3. Start Aggregation API Service
+Supports configuration via `PROFILE` environment variable (`1m` or `10m`, default `1m`):
+
 ```powershell
+# For 1M profile:
+$env:PROFILE="1m"
+py -3.12 -m uvicorn api.main:app --port 8000 --no-access-log
+
+# For 10M profile:
+$env:PROFILE="10m"
 py -3.12 -m uvicorn api.main:app --port 8000 --no-access-log
 ```
 
@@ -157,7 +189,7 @@ curl -N -s "http://127.0.0.1:8000/tenants/1/stream" \
 
 ## Benchmark Results
 
-*Data Source: `docs/results/scaling.json`*  
+*Data Source: `docs/results/scaling.json` and `docs/BENCHMARK.md`*  
 *Hardware: Balu laptop i5-1235U, 15.7 GB | Data Size: 1M & 10M*  
 *(Note: rerun pending on Lenovo)*
 
@@ -174,24 +206,47 @@ curl -N -s "http://127.0.0.1:8000/tenants/1/stream" \
 | 50 Tenants | Poll Mode | 30.70 | 36.80 |
 | 100 Tenants | Poll Mode | 27.60 | 43.90 |
 
-### 2. Worker Cost & Idle Footprint (100 Tenants)
+For a single active tenant, freshness is similar in poll and event mode (p50 about 26 to 31 ms). The difference is worker cost: poll cycle averages 216.1 ms over 100 tenants at 1M; event mode does no work for idle tenants.
+
+### 2. Query Latency and Growth
+
+| Query Endpoint | 1M p95 Latency | 10M p95 Latency | Growth Ratio (p95) | PRD Tier (Latency) | PRD Tier (Growth) | Source File |
+|---|---|---|---|---|---|---|
+| `/orders/count` | 7.50 ms | 6.32 ms | 1.78x | Great (< 200 ms) | Great (< 2x) | `docs/BENCHMARK.md` |
+| `/orders/trend` (hour) | 13.58 ms | 10.74 ms | 1.24x | Great (< 200 ms) | Great (< 2x) | `docs/BENCHMARK.md` |
+| `/orders/by-status` | 9.83 ms | 6.09 ms | 1.13x | Great (< 200 ms) | Great (< 2x) | `docs/BENCHMARK.md` |
+| `/products/top` (sales) | 15.75 ms | 64.44 ms | 4.09x | Good (< 1 s) | Good (< 5x) | `docs/BENCHMARK.md` |
+| Naive direct top-10 products (10M) | — | not in results file | — | — | — | `docs/BENCHMARK.md`* |
+
+*\*Note: `docs/BENCHMARK.md` Section 4.1 reports 113.55 ms execution time for direct unindexed heap scan on Tenant 1 rollup; ~1,047 ms raw direct OLTP query was referenced in preliminary test notes but is not in results file.*
+
+### 3. Worker Cost & Idle Footprint (100 Tenants)
 
 | Metric | Measured Value |
 |---|---|
-| Event Mode Idle Loop p50 / p95 | 0.0 ms / 0.0 ms |
+| Event Mode Idle Loop p50 / p95 | not measured |
 | Poll Mode Cycle Time Average | 216.1 ms |
 | Main DB Idle Commits / sec | 30.15 |
 | Rollup DB Idle Commits / sec | 1.75 |
 | Idle CPU Usage (Cores) | 0.05 |
 
-### 3. Scaling & Profile 10M Results
+### 4. Scaling & Profile 10M Results
 
-| Test Profile / Scenario | Metric | Result |
-|---|---|---|
-| Profile 10M Freshness | p50 / p95 / Max | 40.30 ms / 99.65 ms / 3228.03 ms |
-| Flood Isolation (Tenant 1 flood) | Drain Time / Observer Latency | 0.24 s / 77.64 ms |
+| Test Scenario | Mode | Data Size | Metric | Result |
+|---|---|---|---|---|
+| Profile 10M Freshness | Event mode | 10M | p50 / p95 / Max | 40.30 ms / 99.65 ms / 3228.03 ms |
+| Flood Isolation (Tenant 1 flood) | Event mode | 1M | Drain Time / Observer Latency | 0.24 s / 77.64 ms |
 
-### 4. Database Safety Overhead (5 Repeats)
+### 5. Write-path microbenchmark (no worker, no dashboard load)
+
+Stages `a` through `d8` represent the 5 configurations from the benchmark protocol:
+- `a`: Raw writes (baseline)
+- `b`: Table with trigger enabled
+- `c`: Trigger + outbox write
+- `d2`: Concurrency = 2 (nominal 2 dashboard client load stage)
+- `d8`: Concurrency = 8 (nominal 8 dashboard client load stage)
+
+*Note: In this microbenchmark script, stages were executed sequentially on a single client connection without an active worker daemon or background dashboard load.*
 
 | Stage | Description | p50 (ms) | p95 (ms) | p99 (ms) | Mean (ms) | Writes / sec | Server Mean (ms) |
 |---|---|---|---|---|---|---|---|
@@ -200,6 +255,8 @@ curl -N -s "http://127.0.0.1:8000/tenants/1/stream" \
 | `c` | Trigger + outbox write | 1.39 | 2.93 | 4.33 | 1.54 | 642.9 | 0.05 |
 | `d2` | Concurrency = 2 | 1.18 | 2.43 | 3.63 | 1.33 | 747.3 | 0.04 |
 | `d8` | Concurrency = 8 | 1.31 | 2.66 | 4.14 | 1.47 | 675.4 | 0.05 |
+
+Later stages are faster than raw writes, so this reflects warm-up/order effects, not free triggers. This is NOT the PRD DB-safety test (with vs without our layer under load). Event-mode DB safety is not measured. Poll mode failed organiser Good (<25%) on this single laptop, cause unproven.
 
 ---
 
@@ -212,6 +269,10 @@ curl -N -s "http://127.0.0.1:8000/tenants/1/stream" \
 - one LISTEN connection per tenant DB, ceiling about max_connections (300), inferred not tested
 - predefined queries only; B-4 not built; ranges snap to hour/day (UTC)
 - synthetic dataset
+- correctness verified at 1m (smoke suite; full suite pending), 10m rerun pending on the Lenovo
+- early filter drops only no-op updates (fuzz: 500 ops, 5 tenants, 0 mismatches at 1m)
+- worker once died on "too many clients" at max_connections=100, now 300 plus per-tenant reconnect
+- dashboard has no login by PRD design, the real API stays authenticated
 
 ---
 
