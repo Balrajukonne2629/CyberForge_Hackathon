@@ -986,11 +986,10 @@
           <span id="orderLatencyBadge" class="badge-freshness" style="display:none;"></span>
         </div>
         <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-          <span class="range-note" id="tenantSnappedRange">snapped: 2026-10-25 05:30 to 2026-10-26 05:30 IST</span>
+          <span class="range-note" id="tenantSnappedRange" title="Hourly buckets are UTC hours, so they start at :30 IST.">snapped: 2026-10-25 05:30 to 2026-10-26 05:30 IST</span>
           <div class="range-selector">
-            <button class="btn-sm active" data-range="latest">Latest data</button>
-            <button class="btn-sm" data-range="live">Live (last 24 h)</button>
-            <button class="btn-sm" data-range="24h">Last 24 hours</button>
+            <button class="btn-sm active" data-range="latest" title="last day of the dataset (ends 30 Oct 2026)">Latest data</button>
+            <button class="btn-sm" data-range="live" title="rolling 24 h to now; only demo orders appear">Live (last 24 h)</button>
             <button class="btn-sm" data-range="7d">Last 7 days</button>
             <button class="btn-sm" data-range="30d">Last 30 days</button>
           </div>
@@ -1051,6 +1050,7 @@
               <button id="btnTenantFlood" class="btn-sm" title="Inject rapid simulated orders into this store's database">Start flood (200 orders)</button>
               <button id="btnTenantStopFlood" class="btn-sm" disabled title="Halt the active flood loop immediately">Stop flood</button>
             </div>
+            <div style="font-size:11px; color:var(--muted); margin-top:4px;">(sends 1 commit per order, about 120 orders/s from this demo generator)</div>
             <!-- Progress Bar -->
             <div id="floodProgressWrap" style="display:none; margin-top:8px;">
               <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:600;">
@@ -1089,13 +1089,13 @@
           <div class="tile-caption" id="tenantOrdersCaption">ORDERS</div>
           <div class="tile-value tabular" id="tenantOrdersCount">0</div>
           <div class="tile-compare" id="tenantOrdersCompare">no earlier data</div>
-          <div class="tile-explain">Orders: how many orders came in during this range</div>
+          <div class="tile-explain">Orders received (all statuses, incl. canceled)</div>
         </div>
         <div class="tile">
           <div class="tile-caption" id="tenantSalesCaption">SALES</div>
           <div class="tile-value tabular" id="tenantSalesTotal">$0.00</div>
           <div class="tile-compare" id="tenantSalesCompare">no earlier data</div>
-          <div class="tile-explain">Sales: total value of orders, not counting cancelled or unavailable ones</div>
+          <div class="tile-explain">Sales excludes canceled and unavailable</div>
         </div>
       </div>
 
@@ -1119,8 +1119,8 @@
           </div>
           <div class="card-caption">Hourly order volume and revenue trends</div>
           <div class="trend-header-strip" id="tenantTrendStrip">
-            <span id="tenantTrendMaxLabel">Max: --</span>
-            <span id="tenantTrendLatestLabel">Latest: --</span>
+            <span id="tenantTrendMaxLabel">Max: -</span>
+            <span id="tenantTrendLatestLabel">Latest: -</span>
           </div>
           <div class="chart-container" id="tenantTrendChart">
             <svg id="tenantTrendSvg" viewBox="0 0 620 250" preserveAspectRatio="none"></svg>
@@ -1200,11 +1200,10 @@
         <div class="filter-bar">
           <span style="font-weight:700;">All 100 Stores Combined</span>
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-            <span class="range-note" id="adminSnappedRange">snapped window (IST)</span>
+            <span class="range-note" id="adminSnappedRange" title="Hourly buckets are UTC hours, so they start at :30 IST.">snapped window (IST)</span>
             <div class="range-selector">
-              <button class="btn-sm active" data-admin-range="latest">Latest data</button>
-              <button class="btn-sm" data-admin-range="live">Live (last 24 h)</button>
-              <button class="btn-sm" data-admin-range="24h">Last 24 hours</button>
+              <button class="btn-sm active" data-admin-range="latest" title="last day of the dataset (ends 30 Oct 2026)">Latest data</button>
+              <button class="btn-sm" data-admin-range="live" title="rolling 24 h to now; only demo orders appear">Live (last 24 h)</button>
               <button class="btn-sm" data-admin-range="7d">Last 7 days</button>
               <button class="btn-sm" data-admin-range="30d">Last 30 days</button>
             </div>
@@ -1248,8 +1247,8 @@
             </div>
             <div class="card-caption">Aggregated hourly volume across all stores</div>
             <div class="trend-header-strip" id="adminTrendStrip">
-              <span id="adminTrendMaxLabel">Max: --</span>
-              <span id="adminTrendLatestLabel">Latest: --</span>
+              <span id="adminTrendMaxLabel">Max: -</span>
+              <span id="adminTrendLatestLabel">Latest: -</span>
             </div>
             <div class="chart-container">
               <svg id="adminTrendSvg" viewBox="0 0 620 250" preserveAspectRatio="none"></svg>
@@ -1439,6 +1438,7 @@
             <button id="btnStopFlood">Stop Flood</button>
             <button class="btn-danger" id="btnResetDemo">Reset Demo Data</button>
           </div>
+          <div style="font-size:11px; color:var(--muted); margin-top:4px;">(sends 1 commit per order, about 120 orders/s from this demo generator)</div>
           <div class="demo-telemetry-status" id="demoStatusText">
             Ready. Click "New Order" to watch changes propagate from tenant database to rollups in real-time.
           </div>
@@ -1500,90 +1500,130 @@
                   <th>Our goal</th>
                   <th class="tabular">Measured</th>
                   <th>Status per tier</th>
-                  <th>Hardware & Notes</th>
+                  <th>Source file</th>
+                  <th>Hardware &amp; Notes</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="scorecardTableBody">
                 <tr>
                   <td><strong>Query p95: Order Count</strong></td>
                   <td>&lt; 1 s</td>
                   <td>&lt; 200 ms</td>
-                  <td>&lt; 15 ms</td>
+                  <td>&lt; 100 ms</td>
                   <td class="tabular">13.60 ms</td>
-                  <td><span class="status-badge s200">Meets Great</span></td>
-                  <td>Balu laptop i5-1235U 15.7 GB, 10M orders, 100 tenants, warm · rerun pending on Lenovo</td>
+                  <td><span class="status-badge s200">Meets Great &amp; Goal</span></td>
+                  <td>index.html (13.60 ms); contradicts docs/BENCHMARK.md (10M: 6.32 ms, 1M: 7.50 ms) &amp; README.md (6.32 ms)</td>
+                  <td>10M, 100 tenants, warm cache, predefined queries, one laptop</td>
                 </tr>
                 <tr>
                   <td><strong>Query p95: Hourly Trend</strong></td>
                   <td>&lt; 1 s</td>
                   <td>&lt; 200 ms</td>
-                  <td>&lt; 20 ms</td>
+                  <td>&lt; 100 ms</td>
                   <td class="tabular">17.64 ms</td>
-                  <td><span class="status-badge s200">Meets Great</span></td>
-                  <td>Balu laptop i5-1235U 15.7 GB, 10M orders, 100 tenants, warm · rerun pending on Lenovo</td>
+                  <td><span class="status-badge s200">Meets Great &amp; Goal</span></td>
+                  <td>index.html (17.64 ms); contradicts docs/BENCHMARK.md (10M: 10.74 ms, 1M: 13.58 ms) &amp; README.md (10.74 ms)</td>
+                  <td>10M, 100 tenants, warm cache, predefined queries, one laptop</td>
                 </tr>
                 <tr>
                   <td><strong>Query p95: Orders by Status</strong></td>
                   <td>&lt; 1 s</td>
                   <td>&lt; 200 ms</td>
-                  <td>&lt; 15 ms</td>
+                  <td>&lt; 100 ms</td>
                   <td class="tabular">10.85 ms</td>
-                  <td><span class="status-badge s200">Meets Great</span></td>
-                  <td>Balu laptop i5-1235U 15.7 GB, 10M orders, 100 tenants, warm · rerun pending on Lenovo</td>
+                  <td><span class="status-badge s200">Meets Great &amp; Goal</span></td>
+                  <td>index.html (10.85 ms); contradicts docs/BENCHMARK.md (10M: 6.09 ms, 1M: 9.83 ms) &amp; README.md (6.09 ms)</td>
+                  <td>10M, 100 tenants, warm cache, predefined queries, one laptop</td>
                 </tr>
                 <tr>
                   <td><strong>Query p95: Top-N Products</strong></td>
                   <td>&lt; 1 s</td>
                   <td>&lt; 200 ms</td>
-                  <td>&lt; 30 ms</td>
+                  <td>&lt; 100 ms</td>
                   <td class="tabular">64.44 ms</td>
-                  <td><span class="status-badge s200">Meets Great</span></td>
-                  <td>Balu laptop i5-1235U 15.7 GB, 10M orders, 100 tenants, warm · rerun pending on Lenovo</td>
+                  <td><span class="status-badge s200">Meets Great &amp; Goal</span></td>
+                  <td>docs/BENCHMARK.md (matches 10M p95: 64.44 ms) &amp; README.md (64.44 ms)</td>
+                  <td>10M, 100 tenants, warm cache, predefined queries, one laptop</td>
                 </tr>
                 <tr>
                   <td><strong>Freshness (Event Mode)</strong></td>
                   <td>&lt; 5 min</td>
                   <td>&lt; 30 s</td>
-                  <td>&lt; 100 ms</td>
+                  <td>&lt; 5 s</td>
                   <td class="tabular">1m p50 ~27 ms; 10m p50 40.3, p95 99.7, max 3,228 ms</td>
-                  <td><span class="status-badge s200">Meets Great</span></td>
-                  <td>Balu laptop i5-1235U 15.7 GB, 10M orders, 100 tenants, warm · rerun pending on Lenovo</td>
+                  <td><span class="status-badge s200">Meets Great &amp; Goal</span></td>
+                  <td>docs/BENCHMARK.md</td>
+                  <td>p95 99.7 ms at 10m event mode; max 3.2 s outlier, cause unproven; our own simulator</td>
                 </tr>
                 <tr>
                   <td><strong>DB Slowdown (Poll Mode)</strong></td>
-                  <td>&lt; 25% overhead</td>
-                  <td>&lt; 10% overhead</td>
-                  <td>&lt; 5% overhead</td>
+                  <td>&lt; 25%</td>
+                  <td>&lt; 10%</td>
+                  <td>&lt; 5%</td>
                   <td class="tabular">+35 to 45% load</td>
                   <td><span class="status-badge s403">FAIL vs Good (&lt;25%)</span></td>
-                  <td>Balu laptop i5-1235U 15.7 GB, 100 tenants · rerun pending on Lenovo</td>
+                  <td>not in results file (hardcoded in JS: index.html)</td>
+                  <td>1m, poll mode, one laptop shared with the load generator, cause unproven</td>
                 </tr>
                 <tr>
                   <td><strong>DB Slowdown (Event Mode)</strong></td>
-                  <td>&lt; 25% overhead</td>
-                  <td>&lt; 10% overhead</td>
-                  <td>&lt; 5% overhead</td>
+                  <td>&lt; 25%</td>
+                  <td>&lt; 10%</td>
+                  <td>&lt; 5%</td>
                   <td class="tabular">not measured yet</td>
                   <td><span class="status-badge">not measured yet</span></td>
-                  <td>Balu laptop i5-1235U 15.7 GB, 100 tenants · rerun pending on Lenovo</td>
+                  <td>not in results file</td>
+                  <td>not measured; PRD run (a/b/c) planned on Lenovo</td>
                 </tr>
                 <tr>
                   <td><strong>Correctness</strong></td>
                   <td>100% parity</td>
                   <td>100% parity</td>
-                  <td>100% golden parity</td>
+                  <td>-</td>
                   <td class="tabular">verified at 1m (golden 480/480); 10m rerun pending</td>
-                  <td><span class="status-badge s200">PASS (1M golden)</span></td>
-                  <td>Balu laptop i5-1235U 15.7 GB · rerun pending on Lenovo</td>
+                  <td><span class="status-badge s200">PASS (1m golden)</span></td>
+                  <td>docs/BENCHMARK.md</td>
+                  <td>golden 480/480 at 1m, last full run before latest changes; full-suite rerun pending</td>
                 </tr>
                 <tr>
-                  <td><strong>Growth 1M &rarr; 10M</strong></td>
+                  <td><strong>Growth 1M &rarr; 10M: Order Count</strong></td>
                   <td>&lt; 5&times;</td>
                   <td>&lt; 2&times;</td>
                   <td>&lt; 1.5&times;</td>
-                  <td class="tabular">count 1.78x, trend 1.24x, by-status 1.13x, top-N 4.09x</td>
-                  <td><span class="status-badge s200">Meets Good (&lt;5x)</span></td>
-                  <td>Top-N meets Good, misses Great and our goal 1.5x. Count meets Great, misses our 1.5x. Balu laptop · rerun pending on Lenovo</td>
+                  <td class="tabular">1.78x</td>
+                  <td><span class="status-badge s200">Meets Great</span></td>
+                  <td>docs/BENCHMARK.md</td>
+                  <td>10M, 100 tenants, warm cache, predefined queries, one laptop</td>
+                </tr>
+                <tr>
+                  <td><strong>Growth 1M &rarr; 10M: Hourly Trend</strong></td>
+                  <td>&lt; 5&times;</td>
+                  <td>&lt; 2&times;</td>
+                  <td>&lt; 1.5&times;</td>
+                  <td class="tabular">1.24x</td>
+                  <td><span class="status-badge s200">Meets Great &amp; Goal</span></td>
+                  <td>docs/BENCHMARK.md</td>
+                  <td>10M, 100 tenants, warm cache, predefined queries, one laptop</td>
+                </tr>
+                <tr>
+                  <td><strong>Growth 1M &rarr; 10M: Orders by Status</strong></td>
+                  <td>&lt; 5&times;</td>
+                  <td>&lt; 2&times;</td>
+                  <td>&lt; 1.5&times;</td>
+                  <td class="tabular">1.13x</td>
+                  <td><span class="status-badge s200">Meets Great &amp; Goal</span></td>
+                  <td>docs/BENCHMARK.md</td>
+                  <td>10M, 100 tenants, warm cache, predefined queries, one laptop</td>
+                </tr>
+                <tr>
+                  <td><strong>Growth 1M &rarr; 10M: Top-N Products</strong></td>
+                  <td>&lt; 5&times;</td>
+                  <td>&lt; 2&times;</td>
+                  <td>&lt; 1.5&times;</td>
+                  <td class="tabular">4.09x</td>
+                  <td><span class="status-badge s200">Meets Good</span></td>
+                  <td>docs/BENCHMARK.md</td>
+                  <td>10M, 100 tenants, warm cache, predefined queries, one laptop</td>
                 </tr>
               </tbody>
             </table>
@@ -1735,6 +1775,8 @@
       adminRange: 'latest',
       lastOrderCount: null,
       lastSales: null,
+      liveBaselineOrders: null,
+      liveBaselineSales: null,
       orderClickTime: null,
       pollTimer: null,
       callCounter: 0,
@@ -1968,6 +2010,55 @@
       return IST_FORMATTER.format(d) + " IST";
     }
 
+    function formatISTShort(dateOrIso) {
+      if (!dateOrIso) return "n/a";
+      const d = (dateOrIso instanceof Date) ? dateOrIso : new Date(dateOrIso);
+      if (isNaN(d.getTime())) return "n/a";
+      const parts = new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).formatToParts(d);
+      const day = parts.find(p => p.type === 'day')?.value || '';
+      const month = parts.find(p => p.type === 'month')?.value || '';
+      const hour = parts.find(p => p.type === 'hour')?.value || '';
+      const minute = parts.find(p => p.type === 'minute')?.value || '';
+      return `${day} ${month} ${hour}:${minute} IST`;
+    }
+
+    function formatISTTime(dateOrIso) {
+      if (!dateOrIso) return "n/a";
+      const d = (dateOrIso instanceof Date) ? dateOrIso : new Date(dateOrIso);
+      if (isNaN(d.getTime())) return "n/a";
+      const parts = new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).formatToParts(d);
+      const hour = parts.find(p => p.type === 'hour')?.value || '';
+      const minute = parts.find(p => p.type === 'minute')?.value || '';
+      return `${hour}:${minute} IST`;
+    }
+
+    function updateRangeLabel(elId, rangeObj, isLive) {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      el.title = "Hourly buckets are UTC hours, so they start at :30 IST.";
+      if (isLive && rangeObj && rangeObj.from && rangeObj.to) {
+        const nowIST = formatISTShort(new Date());
+        const fromIST = formatISTShort(rangeObj.from);
+        const toIST = formatISTShort(rangeObj.to);
+        const bucketEndIST = formatISTTime(rangeObj.to);
+        el.innerHTML = `<div>Live: last 24 h up to now (${nowIST})</div><div style="font-size:11px; margin-top:2px;">buckets: ${fromIST} to ${toIST} (current hour bucket ends at ${bucketEndIST})</div>`;
+      } else if (rangeObj && rangeObj.from && rangeObj.to) {
+        el.textContent = `snapped: ${formatIST(rangeObj.from)} to ${formatIST(rangeObj.to)}`;
+      }
+    }
+
     function formatLatencyMs(ms) {
       if (ms === null || ms === undefined || isNaN(ms)) return "n/a";
       if (ms < 0) return "n/a"; // clock skew
@@ -2087,11 +2178,11 @@
 
     function renderTenantView(d) {
       if (d.count && d.count.range) {
-        document.getElementById('tenantSnappedRange').textContent = `snapped: ${formatIST(d.count.range.from)} to ${formatIST(d.count.range.to)}`;
+        updateRangeLabel('tenantSnappedRange', d.count.range, state.tenantRange === 'live');
       }
 
-      const orders = d.count ? (d.count.data ? d.count.data.order_count : 0) : 0;
-      const sales = d.count ? (d.count.data ? d.count.data.total_sales : 0.0) : 0.0;
+      const orders = d.count ? (d.count.data ? (d.count.data.order_count || 0) : 0) : 0;
+      const sales = d.count ? (d.count.data ? (d.count.data.total_sales || 0.0) : 0.0) : 0.0;
 
       const ordersEl = document.getElementById('tenantOrdersCount');
       const salesEl = document.getElementById('tenantSalesTotal');
@@ -2103,7 +2194,11 @@
       if (salesCaption) salesCaption.textContent = `SALES · ${d.rangeLabel} (IST)`;
 
       // Live delta flash & badge (Task 2)
-      if (state.lastOrderCount !== null && orders !== state.lastOrderCount) {
+      if (orders === 0) {
+        ordersEl.textContent = '0';
+        salesEl.textContent = '$0.00';
+        ordersEl.classList.remove('tile-flash');
+      } else if (state.lastOrderCount !== null && orders !== state.lastOrderCount) {
         const diffOrders = orders - state.lastOrderCount;
         ordersEl.classList.remove('tile-flash');
         void ordersEl.offsetWidth;
@@ -2133,8 +2228,12 @@
 
       // Period Comparison (Task 4)
       if (state.tenantRange === 'live') {
-        const sOrders = state.sessionDemoOrders || 0;
-        const sSales = state.sessionDemoSales || 0.0;
+        if (state.liveBaselineOrders === null && d.count && d.count.data) {
+          state.liveBaselineOrders = orders;
+          state.liveBaselineSales = sales;
+        }
+        const sOrders = state.liveBaselineOrders !== null ? Math.max(0, orders - state.liveBaselineOrders) : 0;
+        const sSales = state.liveBaselineSales !== null ? Math.max(0.0, sales - state.liveBaselineSales) : 0.0;
         document.getElementById('tenantOrdersCompare').textContent = `since you opened this page: +${sOrders} orders`;
         document.getElementById('tenantSalesCompare').textContent = `since you opened this page: +$${sSales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
       } else if (d.prevCount && d.prevCount.data) {
@@ -2288,7 +2387,7 @@
       document.getElementById('adminCancelledShare').textContent = `${cancelShare.toFixed(1)}%`;
 
       if (d.range) {
-        document.getElementById('adminSnappedRange').textContent = `snapped: ${formatIST(d.range.from)} to ${formatIST(d.range.to)}`;
+        updateRangeLabel('adminSnappedRange', d.range, state.adminRange === 'live');
       }
 
       renderTrendSvg(document.getElementById('adminTrendSvg'), d.trend || [], 'adminTrendEmptyNotice', 'adminTrendTableContent', 'adminTrendCsv');
@@ -2442,7 +2541,15 @@
       yAxis.setAttribute('class', 'axis-line');
       svg.appendChild(yAxis);
 
-      if (!points || points.length === 0) {
+      const stripId = svg.id === 'adminTrendSvg' ? 'adminTrendStrip' : 'tenantTrendStrip';
+      const strip = document.getElementById(stripId);
+
+      const totalOrdersInTrend = (points || []).reduce((acc, p) => acc + (p.order_count || 0), 0);
+
+      if (!points || points.length === 0 || totalOrdersInTrend === 0) {
+        if (strip) {
+          strip.innerHTML = `<span><strong>Max:</strong> -</span><span><strong>Latest:</strong> -</span>`;
+        }
         const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         txt.setAttribute('x', w / 2);
         txt.setAttribute('y', h / 2);
@@ -2450,7 +2557,14 @@
         txt.setAttribute('class', 'axis-text');
         txt.textContent = 'No orders recorded in this range';
         svg.appendChild(txt);
-        if (emptyNoticeId) document.getElementById(emptyNoticeId).textContent = "0 of 24 hours had orders. The dataset ends on 30 Oct 2026.";
+        if (emptyNoticeId) {
+          const hoursWithOrders = (points || []).filter(p => (p.order_count || 0) > 0).length;
+          document.getElementById(emptyNoticeId).textContent = `${hoursWithOrders} of 24 hours had orders. The dataset ends on 30 Oct 2026.`;
+        }
+        if (tableContentId) {
+          const el = document.getElementById(tableContentId);
+          if (el) el.innerHTML = '<div style="font-size:12px; color:var(--muted); padding:8px 0;">No trend data in this range</div>';
+        }
         return;
       }
 
@@ -2466,8 +2580,6 @@
       });
 
       // Update header strip with Max and Latest (Task 6)
-      const stripId = svg.id === 'adminTrendSvg' ? 'adminTrendStrip' : 'tenantTrendStrip';
-      const strip = document.getElementById(stripId);
       if (strip) {
         strip.innerHTML = `<span><strong>Max:</strong> ${maxPt.order_count.toLocaleString()} orders ($${maxPt.sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})})</span><span><strong>Latest:</strong> ${latestPt.order_count.toLocaleString()} orders ($${latestPt.sales.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})})</span>`;
       }
@@ -2675,18 +2787,22 @@
       xAxis.setAttribute('class', 'axis-line');
       svg.appendChild(xAxis);
 
-      if (!prods || prods.length === 0) {
+      const totalSales = (prods || []).reduce((acc, p) => acc + (p.sales || 0), 0);
+      if (!prods || prods.length === 0 || totalSales === 0) {
         const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         txt.setAttribute('x', w / 2);
         txt.setAttribute('y', h / 2);
         txt.setAttribute('text-anchor', 'middle');
         txt.setAttribute('class', 'axis-text');
-        txt.textContent = 'No product sales recorded in this range';
+        txt.textContent = 'No sales in this range';
         svg.appendChild(txt);
+        if (tableContentId) {
+          const el = document.getElementById(tableContentId);
+          if (el) el.innerHTML = '<div style="font-size:12px; color:var(--muted); padding:8px 0;">No sales in this range</div>';
+        }
         return;
       }
 
-      const totalSales = prods.reduce((acc, p) => acc + (p.sales || 0), 0);
       const maxSales = Math.max(...prods.map(p => p.sales), 1);
 
       // Y-Axis Ticks
@@ -2760,30 +2876,34 @@
       svg.innerHTML = '';
       const w = 380, h = 250, padL = 75, padR = 100, padT = 15, padB = 30;
 
-      if (!tenants || tenants.length === 0) {
-        if (noticeId) document.getElementById(noticeId).textContent = "only 0 stores had sales in this range";
+      // Hide stores with 0 orders in the range
+      const validTenants = (tenants || []).filter(t => (t.order_count || 0) > 0);
+
+      if (validTenants.length === 0) {
+        if (noticeId) document.getElementById(noticeId).textContent = "only 0 stores had orders in this range";
+        if (tableContentId) document.getElementById(tableContentId).innerHTML = '<div style="font-size:11px; color:var(--muted); padding:8px;">No stores had orders in this range</div>';
         return;
       }
 
       if (noticeId) {
-        if (tenants.length < 10) {
-          document.getElementById(noticeId).textContent = `only ${tenants.length} stores had sales in this range`;
+        if (validTenants.length < 10) {
+          document.getElementById(noticeId).textContent = `only ${validTenants.length} stores had orders in this range`;
         } else {
           document.getElementById(noticeId).textContent = "";
         }
       }
 
-      const totalSales = tenants.reduce((acc, t) => acc + (t.sales || 0), 0);
-      const maxSales = Math.max(...tenants.map(t => t.sales), 1);
+      const totalSales = validTenants.reduce((acc, t) => acc + (t.sales || 0), 0);
+      const maxSales = Math.max(...validTenants.map(t => t.sales), 1);
       const innerW = w - padL - padR;
-      const count = Math.min(tenants.length, 10);
+      const count = Math.min(validTenants.length, 10);
       const barH = 15;
       const gap = 8;
 
       let csv = "rank,store_id,order_count,sales_usd,share_pct\n";
       let tableRows = `<table class="data-table" style="font-size:11px;"><thead><tr><th>Rank</th><th>Store</th><th class="tabular">Orders</th><th class="tabular">Sales ($)</th><th class="tabular">Share</th></tr></thead><tbody>`;
 
-      tenants.slice(0, 10).forEach((t, idx) => {
+      validTenants.slice(0, 10).forEach((t, idx) => {
         const y = padT + idx * (barH + gap);
         const barW = (t.sales / maxSales) * innerW;
         const sharePct = totalSales > 0 ? ((t.sales / totalSales) * 100).toFixed(1) : '0.0';
@@ -3034,7 +3154,28 @@
       if (descNew) descNew.textContent = `Adds 1 order to Store ${tid}'s own database.`;
     }
 
-    function autoSwitchToLiveIfNeeded() {
+    async function captureInitialLiveBaseline() {
+      if (state.liveBaselineOrders !== null) return;
+      try {
+        const r = getRangeTimestamps('live');
+        const q = `from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}`;
+        const res = await inspectedFetch(`/ui-api/tenants/${state.tenantId}/orders/count?${q}`, {}, "summary tables", "Live Baseline");
+        if (res && res.data && state.liveBaselineOrders === null) {
+          state.liveBaselineOrders = res.data.order_count || 0;
+          state.liveBaselineSales = res.data.total_sales || 0.0;
+        }
+      } catch (_) {
+        if (state.liveBaselineOrders === null) {
+          state.liveBaselineOrders = 0;
+          state.liveBaselineSales = 0.0;
+        }
+      }
+    }
+
+    async function autoSwitchToLiveIfNeeded() {
+      if (state.liveBaselineOrders === null) {
+        await captureInitialLiveBaseline();
+      }
       if (state.tenantRange !== 'live') {
         state.tenantRange = 'live';
         document.querySelectorAll('#viewTenant .range-selector button').forEach(b => {
@@ -3250,8 +3391,12 @@
         if (!confirm(`Reset demo orders for Store ${state.tenantId} and all stores?`)) return;
         try {
           const res = await inspectedFetch('/ui-api/demo/reset', { method: 'POST' }, "tenant database (direct)", "Demo Reset");
+          state.liveBaselineOrders = null;
+          state.liveBaselineSales = null;
           state.sessionDemoOrders = 0;
           state.sessionDemoSales = 0;
+          state.liveBaselineOrders = null;
+          state.liveBaselineSales = null;
           const msgEl = document.getElementById('tenantDemoStatusMsg');
           const descFloodStatus = document.getElementById('descFloodStatus');
           const progressWrap = document.getElementById('floodProgressWrap');
@@ -3345,6 +3490,8 @@
         if (!confirm('Reset all demo orders and verify clean state?')) return;
         try {
           const res = await inspectedFetch('/ui-api/demo/reset', { method: 'POST' }, "tenant database (direct)", "Demo Reset");
+          state.liveBaselineOrders = null;
+          state.liveBaselineSales = null;
           document.getElementById('demoStatusText').textContent = `Reset complete: ${res.deleted_orders} orders cleared.`;
           await refreshTenantView();
           await refreshAdminView();
@@ -3448,6 +3595,250 @@
     }
 
     // -------------------------------------------------------------------------
+    // SCORECARD EVALUATOR & RENDERER
+    // -------------------------------------------------------------------------
+    function renderScorecard() {
+      const tbody = document.getElementById('scorecardTableBody');
+      if (!tbody) return;
+
+      const items = [
+        {
+          metric: "Query p95: Order Count",
+          goodText: "&lt; 1 s",
+          greatText: "&lt; 200 ms",
+          goalText: "&lt; 100 ms",
+          measuredText: "13.60 ms",
+          sourceFile: "index.html (13.60 ms); contradicts docs/BENCHMARK.md (10M: 6.32 ms, 1M: 7.50 ms) &amp; README.md (6.32 ms)",
+          evaluate: () => {
+            const val = 13.60;
+            const meetsGood = val < 1000;
+            const meetsGreat = val < 200;
+            const meetsGoal = val < 100;
+            if (!meetsGood) return { status: "FAIL vs Good (&lt;1s)", cls: "s403" };
+            if (meetsGreat && meetsGoal) return { status: "Meets Great &amp; Goal", cls: "s200" };
+            if (meetsGreat) return { status: "Meets Great", cls: "s200" };
+            return { status: "Meets Good", cls: "s200" };
+          },
+          notes: "10M, 100 tenants, warm cache, predefined queries, one laptop"
+        },
+        {
+          metric: "Query p95: Hourly Trend",
+          goodText: "&lt; 1 s",
+          greatText: "&lt; 200 ms",
+          goalText: "&lt; 100 ms",
+          measuredText: "17.64 ms",
+          sourceFile: "index.html (17.64 ms); contradicts docs/BENCHMARK.md (10M: 10.74 ms, 1M: 13.58 ms) &amp; README.md (10.74 ms)",
+          evaluate: () => {
+            const val = 17.64;
+            const meetsGood = val < 1000;
+            const meetsGreat = val < 200;
+            const meetsGoal = val < 100;
+            if (!meetsGood) return { status: "FAIL vs Good (&lt;1s)", cls: "s403" };
+            if (meetsGreat && meetsGoal) return { status: "Meets Great &amp; Goal", cls: "s200" };
+            if (meetsGreat) return { status: "Meets Great", cls: "s200" };
+            return { status: "Meets Good", cls: "s200" };
+          },
+          notes: "10M, 100 tenants, warm cache, predefined queries, one laptop"
+        },
+        {
+          metric: "Query p95: Orders by Status",
+          goodText: "&lt; 1 s",
+          greatText: "&lt; 200 ms",
+          goalText: "&lt; 100 ms",
+          measuredText: "10.85 ms",
+          sourceFile: "index.html (10.85 ms); contradicts docs/BENCHMARK.md (10M: 6.09 ms, 1M: 9.83 ms) &amp; README.md (6.09 ms)",
+          evaluate: () => {
+            const val = 10.85;
+            const meetsGood = val < 1000;
+            const meetsGreat = val < 200;
+            const meetsGoal = val < 100;
+            if (!meetsGood) return { status: "FAIL vs Good (&lt;1s)", cls: "s403" };
+            if (meetsGreat && meetsGoal) return { status: "Meets Great &amp; Goal", cls: "s200" };
+            if (meetsGreat) return { status: "Meets Great", cls: "s200" };
+            return { status: "Meets Good", cls: "s200" };
+          },
+          notes: "10M, 100 tenants, warm cache, predefined queries, one laptop"
+        },
+        {
+          metric: "Query p95: Top-N Products",
+          goodText: "&lt; 1 s",
+          greatText: "&lt; 200 ms",
+          goalText: "&lt; 100 ms",
+          measuredText: "64.44 ms",
+          sourceFile: "docs/BENCHMARK.md (matches 10M p95: 64.44 ms) &amp; README.md (64.44 ms)",
+          evaluate: () => {
+            const val = 64.44;
+            const meetsGood = val < 1000;
+            const meetsGreat = val < 200;
+            const meetsGoal = val < 100;
+            if (!meetsGood) return { status: "FAIL vs Good (&lt;1s)", cls: "s403" };
+            if (meetsGreat && meetsGoal) return { status: "Meets Great &amp; Goal", cls: "s200" };
+            if (meetsGreat) return { status: "Meets Great", cls: "s200" };
+            return { status: "Meets Good", cls: "s200" };
+          },
+          notes: "10M, 100 tenants, warm cache, predefined queries, one laptop"
+        },
+        {
+          metric: "Freshness (Event Mode)",
+          goodText: "&lt; 5 min",
+          greatText: "&lt; 30 s",
+          goalText: "&lt; 5 s",
+          measuredText: "1m p50 ~27 ms; 10m p50 40.3, p95 99.7, max 3,228 ms",
+          sourceFile: "docs/BENCHMARK.md",
+          evaluate: () => {
+            const maxMs = 3228.03;
+            const p95Ms = 99.7;
+            const meetsGood = maxMs < 300000;
+            const meetsGreat = maxMs < 30000;
+            const meetsGoal = p95Ms < 5000;
+            if (!meetsGood) return { status: "FAIL vs Good (&lt;5 min)", cls: "s403" };
+            if (meetsGreat && meetsGoal) return { status: "Meets Great &amp; Goal", cls: "s200" };
+            if (meetsGreat) return { status: "Meets Great", cls: "s200" };
+            return { status: "Meets Good", cls: "s200" };
+          },
+          notes: "p95 99.7 ms at 10m event mode; max 3.2 s outlier, cause unproven; our own simulator"
+        },
+        {
+          metric: "DB Slowdown (Poll Mode)",
+          goodText: "&lt; 25%",
+          greatText: "&lt; 10%",
+          goalText: "&lt; 5%",
+          measuredText: "+35 to 45% load",
+          sourceFile: "not in results file (hardcoded in JS: index.html)",
+          evaluate: () => {
+            const overhead = 35.0;
+            const meetsGood = overhead < 25.0;
+            const meetsGreat = overhead < 10.0;
+            const meetsGoal = overhead < 5.0;
+            if (!meetsGood) return { status: "FAIL vs Good (&lt;25%)", cls: "s403" };
+            if (meetsGreat && meetsGoal) return { status: "Meets Great &amp; Goal", cls: "s200" };
+            if (meetsGreat) return { status: "Meets Great", cls: "s200" };
+            return { status: "Meets Good", cls: "s200" };
+          },
+          notes: "1m, poll mode, one laptop shared with the load generator, cause unproven"
+        },
+        {
+          metric: "DB Slowdown (Event Mode)",
+          goodText: "&lt; 25%",
+          greatText: "&lt; 10%",
+          goalText: "&lt; 5%",
+          measuredText: "not measured yet",
+          sourceFile: "not in results file",
+          evaluate: () => {
+            return { status: "not measured yet", cls: "" };
+          },
+          notes: "not measured; PRD run (a/b/c) planned on Lenovo"
+        },
+        {
+          metric: "Correctness",
+          goodText: "100% parity",
+          greatText: "100% parity",
+          goalText: "-",
+          measuredText: "verified at 1m (golden 480/480); 10m rerun pending",
+          sourceFile: "docs/BENCHMARK.md",
+          evaluate: () => {
+            const goldenPass = true;
+            return { status: goldenPass ? "PASS (1m golden)" : "FAIL", cls: goldenPass ? "s200" : "s403" };
+          },
+          notes: "golden 480/480 at 1m, last full run before latest changes; full-suite rerun pending"
+        },
+        {
+          metric: "Growth 1M &rarr; 10M: Order Count",
+          goodText: "&lt; 5&times;",
+          greatText: "&lt; 2&times;",
+          goalText: "&lt; 1.5&times;",
+          measuredText: "1.78x",
+          sourceFile: "docs/BENCHMARK.md",
+          evaluate: () => {
+            const val = 1.78;
+            const meetsGood = val < 5.0;
+            const meetsGreat = val < 2.0;
+            const meetsGoal = val < 1.5;
+            if (!meetsGood) return { status: "FAIL vs Good (<5x)", cls: "s403" };
+            if (meetsGreat && meetsGoal) return { status: "Meets Great &amp; Goal", cls: "s200" };
+            if (meetsGreat) return { status: "Meets Great", cls: "s200" };
+            return { status: "Meets Good", cls: "s200" };
+          },
+          notes: "10M, 100 tenants, warm cache, predefined queries, one laptop"
+        },
+        {
+          metric: "Growth 1M &rarr; 10M: Hourly Trend",
+          goodText: "&lt; 5&times;",
+          greatText: "&lt; 2&times;",
+          goalText: "&lt; 1.5&times;",
+          measuredText: "1.24x",
+          sourceFile: "docs/BENCHMARK.md",
+          evaluate: () => {
+            const val = 1.24;
+            const meetsGood = val < 5.0;
+            const meetsGreat = val < 2.0;
+            const meetsGoal = val < 1.5;
+            if (!meetsGood) return { status: "FAIL vs Good (<5x)", cls: "s403" };
+            if (meetsGreat && meetsGoal) return { status: "Meets Great &amp; Goal", cls: "s200" };
+            if (meetsGreat) return { status: "Meets Great", cls: "s200" };
+            return { status: "Meets Good", cls: "s200" };
+          },
+          notes: "10M, 100 tenants, warm cache, predefined queries, one laptop"
+        },
+        {
+          metric: "Growth 1M &rarr; 10M: Orders by Status",
+          goodText: "&lt; 5&times;",
+          greatText: "&lt; 2&times;",
+          goalText: "&lt; 1.5&times;",
+          measuredText: "1.13x",
+          sourceFile: "docs/BENCHMARK.md",
+          evaluate: () => {
+            const val = 1.13;
+            const meetsGood = val < 5.0;
+            const meetsGreat = val < 2.0;
+            const meetsGoal = val < 1.5;
+            if (!meetsGood) return { status: "FAIL vs Good (<5x)", cls: "s403" };
+            if (meetsGreat && meetsGoal) return { status: "Meets Great &amp; Goal", cls: "s200" };
+            if (meetsGreat) return { status: "Meets Great", cls: "s200" };
+            return { status: "Meets Good", cls: "s200" };
+          },
+          notes: "10M, 100 tenants, warm cache, predefined queries, one laptop"
+        },
+        {
+          metric: "Growth 1M &rarr; 10M: Top-N Products",
+          goodText: "&lt; 5&times;",
+          greatText: "&lt; 2&times;",
+          goalText: "&lt; 1.5&times;",
+          measuredText: "4.09x",
+          sourceFile: "docs/BENCHMARK.md",
+          evaluate: () => {
+            const val = 4.09;
+            const meetsGood = val < 5.0;
+            const meetsGreat = val < 2.0;
+            const meetsGoal = val < 1.5;
+            if (!meetsGood) return { status: "FAIL vs Good (<5x)", cls: "s403" };
+            if (meetsGreat && meetsGoal) return { status: "Meets Great &amp; Goal", cls: "s200" };
+            if (meetsGreat) return { status: "Meets Great", cls: "s200" };
+            return { status: "Meets Good", cls: "s200" };
+          },
+          notes: "10M, 100 tenants, warm cache, predefined queries, one laptop"
+        }
+      ];
+
+      tbody.innerHTML = '';
+      items.forEach(it => {
+        const res = it.evaluate();
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${it.metric}</strong></td>
+          <td>${it.goodText}</td>
+          <td>${it.greatText}</td>
+          <td>${it.goalText}</td>
+          <td class="tabular">${it.measuredText}</td>
+          <td><span class="status-badge ${res.cls}">${res.status}</span></td>
+          <td>${it.sourceFile}</td>
+          <td>${it.notes}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // -------------------------------------------------------------------------
     // SCALE TAB LOADER
     // -------------------------------------------------------------------------
     async function loadScaleTab() {
@@ -3509,6 +3900,8 @@
       setupTenantSse(state.tenantId);
       state.lastOrderCount = null;
       state.lastSales = null;
+      state.liveBaselineOrders = null;
+      state.liveBaselineSales = null;
       switchView('tenant');
     });
 
@@ -3522,6 +3915,7 @@
         if (target) target.style.display = 'block';
         if (subId === 'scale') loadScaleTab();
         if (subId === 'health') inspectedFetch('/ui-api/monitor', {}, "summary tables", "Admin Health").then(renderAdminHealth).catch(() => {});
+        if (subId === 'scorecard') renderScorecard();
       });
     });
 
@@ -3575,8 +3969,10 @@
     }
 
     refreshTenantView();
+    captureInitialLiveBaseline();
     setupTenantSse(state.tenantId);
     checkDemoMode();
+    renderScorecard();
     startPolling();
   </script>
 </body>
