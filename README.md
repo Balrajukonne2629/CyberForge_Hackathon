@@ -1,143 +1,220 @@
-# CyberForge: Multi-Tenant Real-Time Aggregation Layer
+# CyberForge: Multi-Tenant Real-Time Aggregation Engine
 
-Production-grade real-time analytical aggregation engine built for multi-tenant e-commerce systems. Enforces strict per-tenant database isolation (100 independent PostgreSQL databases), statement-level outbox capture, safe-xid event streaming, granular per-tenant fail-closed blast radius containment, and sub-15ms rollup querying across 1M and 10M events.
+CyberForge is a production-grade real-time analytical aggregation engine designed for multi-tenant e-commerce architectures. It provides strict physical and logical tenant data isolation (100 independent PostgreSQL tenant databases), statement-level outbox trigger capture, event-driven delta ingestion via PostgreSQL `LISTEN`/`NOTIFY`, and pre-aggregated central rollups capable of serving analytical dashboard queries in sub-10ms without querying tenant OLTP databases.
 
 ---
 
-## Architecture Overview
+## Table of Contents
 
-```
-[Store Front / OLTP Writes]
-         │
-         ▼
-[100 Isolated Tenant DBs] (tenant_001 .. tenant_100 on Main DB, port 5432)
-  ├── orders, order_items, customers, products
-  └── outbox (Statement-level AFTER INSERT/UPDATE/DELETE triggers)
-         │
-         ▼ (safe-xid round-robin polling, snapshot-safe delta ingestion)
-[Multi-Source Worker Daemon]
-         │
-         ▼ (UPSERT into rollup tables + per-tenant worker_state tracking)
-[Rollup Database] (rollup_1m / rollup_10m on Rollup DB, port 5433)
-  ├── rollup_orders_hour (CHECK order_count >= 0)
-  ├── rollup_product_day (CHECK units >= 0)
-  ├── worker_state (cursor_xid, lag_seconds, stalled, heartbeat)
-  └── quarantine (isolated payload dead-letter store)
-         │
-         ▼ (Zero-touch to tenant DBs, snapped UTC windows)
-[FastAPI Aggregation Service] (port 8000)
-  └── /health, /admin/stats, /admin/rebuild, /metrics/orders/hourly, /metrics/products/daily
-```
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [One-Command Setup](#one-command-setup)
+- [Start Commands](#start-commands)
+- [API Reference & curl Examples](#api-reference--curl-examples)
+- [Architecture](#architecture)
+- [Benchmark Results](#benchmark-results)
+- [Known Limits](#known-limits)
+- [Dashboard](#dashboard)
+
+---
+
+## Overview
+
+CyberForge addresses the challenge of real-time analytical visibility across fragmented multi-tenant architectures without compromising OLTP database performance, tenant blast-radius containment, or transactional consistency.
+
+Key capabilities:
+- **Tenant Isolation**: 100 individual PostgreSQL databases (`tenant_001` .. `tenant_100`) on port 5432; no cross-tenant joins or queries.
+- **Transactional Outbox Triggers**: Delta changes (`delta_count`, `delta_amount`) captured on `orders` and `order_items` via statement-level triggers with early-filtering of irrelevant mutations.
+- **Event-Driven Streaming**: Dedicated `LISTEN outbox` notification channels enable immediate worker dispatch with 0ms idle loop overhead.
+- **Central Rollups**: Central database (`rollup_1m` or `rollup_10m`) on port 5433 stores hourly order and daily product pre-aggregations.
+- **Serving Layer**: FastAPI service serving pre-aggregated rollups, real-time Server-Sent Events (SSE), tenant concurrency limiting, and telemetry.
 
 ---
 
 ## Prerequisites
 
-1. **Operating System**: Windows 11 with WSL2 backend.
-2. **Docker Desktop**: Running with the WSL2 engine enabled (`docker info` succeeds).
-3. **Python**: Python 3.10 to 3.12 (Python 3.12 recommended).
-4. **Git**: Installed and available in PATH.
-5. **Hardware**: 16 GB RAM (WSL2 allocated 12 GB), 20+ GB free SSD storage.
+1. **Docker**: Docker Engine 24.0+ and Docker Compose v2 (e.g. Docker Desktop on Windows 11 with WSL2 engine enabled).
+2. **Python**: Python 3.12 (standard virtual environment recommended).
+3. **Dataset Path**: Ensure the dataset is accessible at either:
+   - Archive: `data/mitigata_dataset.zip` (or pointed to via `$env:DATASET_ZIP`)
+   - Directory: `data/mitigata_dataset/` containing `schema.sql`, `small/` (1M rows), and `main/` (10M rows).
 
 ---
 
-## Quick Start (PowerShell)
+## One-Command Setup
 
-### 1. Clone & Environment Setup
-
-```powershell
-# Clone the repository
-git clone https://github.com/Balrajukonne2629/CyberForge_Hackathon.git cyberforge
-cd cyberforge
-
-# Create and activate Python virtual environment
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-
-# Install pinned dependencies
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### 2. Dataset Placement
-
-Ensure the `mitigata_dataset` folder or archive is present:
-- Option A: Place `mitigata_dataset.zip` directly at `data/mitigata_dataset.zip`
-- Option B: Set `$env:DATASET_ZIP = "C:\path\to\mitigata_dataset.zip"`
-- Option C: Extract `mitigata_dataset.zip` so `data/mitigata_dataset/` contains `schema.sql`, `small/`, and `main/`.
-
-### 3. One-Command Setup (1M Profile)
+The setup orchestrates container initialization, schema deployment, data splitting across 100 tenant databases, trigger installation, initial rollup population, and verification.
 
 ```powershell
-# Runs pre-flight checks, starts Docker containers, splits 100 tenant DBs,
-# installs triggers, builds rollups, verifies completeness, and tests API.
-python scripts/setup.py --profile 1m
+# For 1M dataset profile:
+py -3.12 scripts/setup.py --profile 1m
+
+# For 10M dataset profile:
+py -3.12 scripts/setup.py --profile 10m
 ```
 
 ---
 
-## Running the System
+## Start Commands
 
-### Start the Multi-Tenant Worker Daemon
+### 1. Start Infrastructure (PostgreSQL Containers)
 ```powershell
-python worker/worker.py --profile 1m
+docker compose up -d
+```
+- Main OLTP database: `127.0.0.1:5432` (`shop`, `tenant_001` .. `tenant_100`)
+- Central Rollup database: `127.0.0.1:5433` (`rollup_1m`, `rollup_10m`)
+
+### 2. Start Multi-Tenant Worker Daemon
+```powershell
+py -3.12 worker/worker.py --profile 1m --mode event
 ```
 
-### Start the FastAPI Aggregation API
+### 3. Start Aggregation API Service
 ```powershell
-python -m uvicorn api.main:app --port 8000
-```
-
-Verify API health:
-```powershell
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/health"
-```
-
----
-
-## Running Verification & Tests
-
-### 1. Unified Trust & Measurement Test Suite (All 11 Suites)
-```powershell
-python tests/run_all.py --profile 1m
-```
-Suites executed:
-1. Tenant Isolation
-2. Idempotency per-tenant
-3. Out-of-Order Commit per-tenant
-4. Single-Tenant Mutation & Fan-out
-5. Concurrent Multi-Tenant Updates (25 DBs)
-6. Fairness & Anti-Starvation
-7. Quarantine Handling
-8. Crash Recovery per-tenant
-9. Per-Tenant Fail Closed & Stall Isolation
-10. Rebuild Equality under Load per-tenant
-11. Golden Ground-Truth Parity vs Tenant DBs
-
-### 2. Dataset Integrity Tripwire
-```powershell
-python tests/integrity_tripwire.py 1m
-```
-
-### 3. Fail-Closed Blast Radius Demo
-```powershell
-python tests/demo_worker_stalled.py
-```
-
-### 4. Official Benchmark Harness
-```powershell
-python bench/bench.py --profile 1m
+py -3.12 -m uvicorn api.main:app --port 8000 --no-access-log
 ```
 
 ---
 
-## Resetting Everything
+## API Reference & curl Examples
 
-To stop all services and wipe container volumes for a completely clean slate:
-```powershell
-docker compose down -v
+Every tenant endpoint requires the `X-Tenant-Key` authentication header (`tenant-key-{tenant_id}`). Administrative endpoints require `X-Admin-Key` (`admin-secret-key-12345`).
+
+### 1. Health Check
+```bash
+curl -s http://127.0.0.1:8000/health
 ```
-To purge extracted temporary staging files if needed:
-```powershell
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue data/.split_staging_*
+
+### 2. Global Administrative Telemetry & Rollup Stats
+```bash
+curl -s http://127.0.0.1:8000/admin/stats \
+  -H "X-Admin-Key: admin-secret-key-12345"
 ```
+
+### 3. Single-Tenant or Global Rollup Rebuild
+```bash
+# Rebuild specific tenant:
+curl -s -X POST "http://127.0.0.1:8000/admin/rebuild?tenant_id=1" \
+  -H "X-Admin-Key: admin-secret-key-12345"
+
+# Rebuild all 100 tenants:
+curl -s -X POST "http://127.0.0.1:8000/admin/rebuild" \
+  -H "X-Admin-Key: admin-secret-key-12345"
+```
+
+### 4. Admin Operational Telemetry (Worker Status & Latency Buffer)
+```bash
+curl -s http://127.0.0.1:8000/admin/monitor \
+  -H "X-Admin-Key: admin-secret-key-12345"
+```
+
+### 5. Orders Count & Revenue
+```bash
+curl -s "http://127.0.0.1:8000/tenants/1/orders/count?from=2026-10-01T00:00:00Z&to=2026-10-30T00:00:00Z" \
+  -H "X-Tenant-Key: tenant-key-1"
+```
+
+### 6. Orders Trend by Time Grain
+```bash
+curl -s "http://127.0.0.1:8000/tenants/1/orders/trend?from=2026-10-01T00:00:00Z&to=2026-10-30T00:00:00Z&grain=hour" \
+  -H "X-Tenant-Key: tenant-key-1"
+```
+
+### 7. Orders Breakdown by Status
+```bash
+curl -s "http://127.0.0.1:8000/tenants/1/orders/by-status?from=2026-10-01T00:00:00Z&to=2026-10-30T00:00:00Z" \
+  -H "X-Tenant-Key: tenant-key-1"
+```
+
+### 8. Top Selling Products
+```bash
+curl -s "http://127.0.0.1:8000/tenants/1/products/top?from=2026-10-01T00:00:00Z&to=2026-10-30T00:00:00Z&n=5" \
+  -H "X-Tenant-Key: tenant-key-1"
+```
+
+### 9. Real-Time Push Stream (Server-Sent Events)
+```bash
+curl -N -s "http://127.0.0.1:8000/tenants/1/stream" \
+  -H "X-Tenant-Key: tenant-key-1"
+```
+
+---
+
+## Architecture
+
+1. **Per-Tenant OLTP Databases**: 100 isolated PostgreSQL tenant databases (`tenant_001` .. `tenant_100`) enforce strict physical blast radius containment.
+2. **Statement-Level Triggers**: Transaction-safe statement-level triggers on `orders` and `order_items` intercept table mutations without row-by-row overhead.
+3. **Early Filtering & Folding**: Non-financial mutations (e.g. `updated_at` only) are ignored, and within-bucket total changes fold into single net deltas.
+4. **Local Outbox Tables**: Changes write to local tenant `outbox` records with explicit transaction identifiers (`xid`) for monotonic ordering.
+5. **PostgreSQL LISTEN/NOTIFY Channels**: Committed transactions issue `pg_notify('outbox', tenant_id)` to instantly wake up the listening daemon.
+6. **Multi-Tenant Rollup Worker**: A single event-driven Python daemon multiplexes 100 socket descriptors via `selectors` without thread pool overhead.
+7. **Snapshot & Cursor Safety**: Rollup batches advance monotonically using `pg_snapshot_xmin` checks to handle out-of-order transaction commits safely.
+8. **Central Rollup Database**: Central aggregation tables (`rollup_orders_hour`, `rollup_product_day`) maintain pre-computed sums with SQL check constraints.
+9. **FastAPI Serving Layer**: The REST service queries only the central rollup database, isolating tenant transactional engines from analytical load.
+10. **Telemetry & Concurrency Guard**: Includes per-tenant semaphore throttling, operational health monitoring, and real-time Server-Sent Events push streaming.
+
+---
+
+## Benchmark Results
+
+*Data Source: `docs/results/scaling.json`*  
+*Hardware: Balu laptop i5-1235U, 15.7 GB | Data Size: 1M & 10M*  
+*(Note: rerun pending on Lenovo)*
+
+### 1. Ingestion Freshness by Tenant Count (Commit to Rollup Visibility)
+
+| Tenants Connected | Mode | p50 Latency (ms) | p95 Latency (ms) |
+|---|---|---|---|
+| 1 Tenant | Event (`LISTEN`/`NOTIFY`) | 26.80 | 39.00 |
+| 10 Tenants | Event (`LISTEN`/`NOTIFY`) | 27.50 | 39.00 |
+| 50 Tenants | Event (`LISTEN`/`NOTIFY`) | 26.50 | 29.60 |
+| 100 Tenants | Event (`LISTEN`/`NOTIFY`) | 26.60 | 39.30 |
+| 1 Tenant | Poll Mode | 25.90 | 37.40 |
+| 10 Tenants | Poll Mode | 29.40 | 38.20 |
+| 50 Tenants | Poll Mode | 30.70 | 36.80 |
+| 100 Tenants | Poll Mode | 27.60 | 43.90 |
+
+### 2. Worker Cost & Idle Footprint (100 Tenants)
+
+| Metric | Measured Value |
+|---|---|
+| Event Mode Idle Loop p50 / p95 | 0.0 ms / 0.0 ms |
+| Poll Mode Cycle Time Average | 216.1 ms |
+| Main DB Idle Commits / sec | 30.15 |
+| Rollup DB Idle Commits / sec | 1.75 |
+| Idle CPU Usage (Cores) | 0.05 |
+
+### 3. Scaling & Profile 10M Results
+
+| Test Profile / Scenario | Metric | Result |
+|---|---|---|
+| Profile 10M Freshness | p50 / p95 / Max | 40.30 ms / 99.65 ms / 3228.03 ms |
+| Flood Isolation (Tenant 1 flood) | Drain Time / Observer Latency | 0.24 s / 77.64 ms |
+
+### 4. Database Safety Overhead (5 Repeats)
+
+| Stage | Description | p50 (ms) | p95 (ms) | p99 (ms) | Mean (ms) | Writes / sec | Server Mean (ms) |
+|---|---|---|---|---|---|---|---|
+| `a` | Raw writes | 1.63 | 4.21 | 7.32 | 2.00 | 496.6 | 0.08 |
+| `b` | Table with trigger | 1.54 | 3.09 | 6.10 | 1.72 | 575.3 | 0.06 |
+| `c` | Trigger + outbox write | 1.39 | 2.93 | 4.33 | 1.54 | 642.9 | 0.05 |
+| `d2` | Concurrency = 2 | 1.18 | 2.43 | 3.63 | 1.33 | 747.3 | 0.04 |
+| `d8` | Concurrency = 8 | 1.31 | 2.66 | 4.14 | 1.47 | 675.4 | 0.05 |
+
+---
+
+## Known Limits
+
+- DB safety failed organiser Good in poll mode on a single laptop, cause unproven; event mode not measured
+- top-N growth 4.09x (Good only); count growth 1.78x
+- B-3 limit 32 / 1 s queue never returned a 429 in a 200-client single-laptop test; neighbor p95 rose to 596 ms; cause unproven
+- SSE max of 10 probes = 1.27 s, cause unproven
+- one LISTEN connection per tenant DB, ceiling about max_connections (300), inferred not tested
+- predefined queries only; B-4 not built; ranges snap to hour/day (UTC)
+- synthetic dataset
+
+---
+
+## Dashboard
+
+TODO after merge
