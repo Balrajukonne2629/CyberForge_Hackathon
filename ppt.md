@@ -8,7 +8,7 @@
 - **Subtitle**: Decoupling High-Volume OLTP from Analytical Dashboards Across 100 Isolated Databases
 - **Team**: Balu & Vignesh (Team `nextgen`)
 - **Key Badge/Callouts**:
-  - `10M Orders` | `100 Isolated Databases` | `Sub-10ms p95` | `100% Parity (480/480)`
+  - `10M Orders` | `100 Isolated Databases` | `Sub-10ms p95` | `480/480 golden checks at 1M`
 - **Visual**: CyberForge Logo / Architecture split-view showing 100 per-tenant databases feeding a centralized real-time rollup tier.
 - **Presenter Script (30s)**:
   > *"Good morning judges and mentors. In modern multi-tenant SaaS, analytical dashboards create severe contention on OLTP databases. Running complex aggregations directly on transactional tables degrades checkout latency, creates noisy-neighbor outages, and compromises tenant blast-radius containment. We built **CyberForge**—a production-grade, event-driven analytical aggregation engine that provides strict physical tenant isolation across 100 independent PostgreSQL databases, delivering sub-10ms p95 analytical queries on 10 million orders with zero contention on primary databases."*
@@ -62,16 +62,16 @@
 - **Layout**: 4-Quadrant Technical Deep-Dive
 - **Quadrant 1: Lossless Early Trigger Filter**
   - Discards no-op mutations (e.g., `updated_at`, notes, shipping address) in statement triggers before writing to outbox.
-  - **Result**: Eliminates 397 out of 1,000 trigger evaluations; outbox row emissions plummeted from 471 to 74 with 100% parity preserved.
+  - **Result**: Eliminates 397 out of 1,000 trigger evaluations; outbox row emissions plummeted from 471 to 74 with 480/480 golden checks at 1M preserved.
 - **Quadrant 2: OS Socket Multiplexing & 0ms Idle Wait**
   - Python `selectors.DefaultSelector` monitors all 100 tenant database sockets in a single lightweight thread.
   - 15ms debouncing coalesces transaction bursts; idle tenants consume **0 database queries and 0ms compute**.
 - **Quadrant 3: Deficit Round-Robin (DRR) Scheduler**
-  - Guarantees fairness under heavy load (`quantum = 500`).
+  - Designed so fairness under heavy load (`quantum = 500`).
   - High-throughput tenants cannot monopolize worker cycles; quiet observer tenants receive immediate processing turns.
 - **Quadrant 4: Safe Watermark Monotonicity (`pg_snapshot_xmin`)**
   - Worker ingestion filters with `xid < pg_snapshot_xmin(pg_current_snapshot())`.
-  - Guarantees concurrent, out-of-order in-flight transactions are never skipped.
+  - Designed so concurrent, out-of-order in-flight transactions are never skipped.
 - **Presenter Script (60s)**:
   > *"Four deep engineering decisions set CyberForge apart. First, our lossless trigger filter intercepts statement mutations and checks if rollup-relevant columns actually changed. In tests, this eliminated 397 unnecessary writes per 1,000 operations. Second, our event-driven worker multiplexes 100 sockets via OS selectors, completely eliminating the 216ms polling penalty. Third, we implemented Deficit Round-Robin scheduling so high-velocity tenants cannot starve quiet neighbors. And fourth, by bounding outbox ingestion to PostgreSQL's active transaction snapshot watermark (xmin), we mathematically guarantee that out-of-order transaction commits are never lost."*
 
@@ -122,7 +122,7 @@
 ---
 
 ### Slide 7: Safety, Trust & Verification
-- **Slide Title**: **Trust & Correctness: 100% Ground-Truth Parity**
+- **Slide Title**: **Trust & Correctness: 480/480 golden checks at 1M**
 - **Layout**: 2-Column Proof Grid
 - **Column 1: Empirical Correctness Verification**
   - **480 / 480 Golden Parity Checks (100.00% match)**:
@@ -201,7 +201,7 @@
   - Interactive Diagrams: `docs/diagrams/architecture.html` & `dataflow.html`
   - Runbook & Benchmarks: `docs/RUNBOOK.md` & `docs/BENCHMARK.md`
 - **Presenter Script (30s)**:
-  > *"To summarize: CyberForge proves that you do not need complex, fragile distributed streaming infrastructure to achieve world-class multi-tenant analytics. With physical database isolation, event-driven socket multiplexing, and pre-aggregated rollups, we achieved sub-10ms queries, sub-40ms freshness, and 100% ground-truth parity across 10 million orders and 100 tenants. Thank you, and we look forward to your questions!"*
+  > *"To summarize: CyberForge proves that you do not need complex, fragile distributed streaming infrastructure to achieve world-class multi-tenant analytics. With physical database isolation, event-driven socket multiplexing, and pre-aggregated rollups, we achieved sub-10ms queries, sub-40ms freshness, and 480/480 golden checks at 1M across 10 million orders and 100 tenants. Thank you, and we look forward to your questions!"*
 
 ---
 

@@ -1,6 +1,6 @@
 # CyberForge: Multi-Tenant Real-Time Aggregation Engine
 
-CyberForge is a production-grade real-time analytical aggregation engine designed for multi-tenant e-commerce architectures. It provides strict physical and logical tenant data isolation (100 independent PostgreSQL tenant databases), statement-level outbox trigger capture, event-driven delta ingestion via PostgreSQL `LISTEN`/`NOTIFY`, and pre-aggregated central rollups capable of serving analytical dashboard queries in sub-10ms without querying tenant OLTP databases.
+CyberForge is a real-time analytical aggregation engine designed for multi-tenant e-commerce architectures. It provides strict physical and logical tenant data isolation (100 independent PostgreSQL tenant databases), statement-level outbox trigger capture, event-driven delta ingestion via PostgreSQL `LISTEN`/`NOTIFY`, and pre-aggregated central rollups capable of serving analytical dashboard queries in sub-10ms without querying tenant OLTP databases.
 
 ---
 
@@ -23,6 +23,8 @@ CyberForge is a production-grade real-time analytical aggregation engine designe
 
 CyberForge addresses the challenge of real-time analytical visibility across fragmented multi-tenant architectures without compromising OLTP database performance, tenant blast-radius containment, or transactional consistency.
 
+See [PRD v1.1 delta](docs/PRD_v1.1_delta.md): per-tenant DBs and event-driven capture deviate from PRD v1.0.
+
 Key capabilities:
 - **Tenant Isolation**: 100 individual PostgreSQL databases (`tenant_001` .. `tenant_100`) on port 5432; no cross-tenant joins or queries.
 - **Transactional Outbox Triggers**: Delta changes (`delta_count`, `delta_amount`) captured on `orders` and `order_items` via statement-level triggers with early-filtering of irrelevant mutations.
@@ -44,15 +46,19 @@ Key capabilities:
 
 ## Quick Start
 
-### 1. Clone Repository
+### 1. Clone & Environment Setup
 ```bash
 git clone https://github.com/Balrajukonne2629/CyberForge_Hackathon.git
-cd "CyberForge Project"
+cd CyberForge_Hackathon
+
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
 ### 2. Dataset Placement
 Place the dataset in either of the following locations:
-- Archive: `data/mitigata_dataset.zip` (or set environment variable `DATASET_ZIP=/path/to/archive.zip`)
+- Archive: `data/mitigata_dataset.zip` or set `DATASET_ZIP`
 - Extracted directory: `data/mitigata_dataset/` containing `schema.sql`, `small/` (1M dataset), and `main/` (10M dataset).
 
 ---
@@ -63,11 +69,13 @@ The setup orchestrates container initialization, schema deployment, data splitti
 
 ```powershell
 # For 1M dataset profile:
-py -3.12 scripts/setup.py --profile 1m
+python scripts/setup.py --profile 1m
 
 # For 10M dataset profile:
-py -3.12 scripts/setup.py --profile 10m
+python scripts/setup.py --profile 10m
 ```
+
+Clean-clone check (commit 31661b8, 1M profile, one laptop i5-1235U 15.7 GB Windows 11): pip 66.6 s, setup 92.7 s, smoke 13/13, full suite 15/15 in 157 s, golden 480/480, tripwire 1,000,000 orders / 1,141,449 items. 10M full suite: rerun pending.
 
 ---
 
@@ -212,12 +220,13 @@ For a single active tenant, freshness is similar in poll and event mode (p50 abo
 
 | Query Endpoint | 1M p95 Latency | 10M p95 Latency | Growth Ratio (p95) | PRD Tier (Latency) | PRD Tier (Growth) | Source File |
 |---|---|---|---|---|---|---|
-| `/orders/count` | 7.50 ms | 6.32 ms | 1.78x | Great (< 200 ms) | Great (< 2x) | `docs/BENCHMARK.md` |
-| `/orders/trend` (hour) | 13.58 ms | 10.74 ms | 1.24x | Great (< 200 ms) | Great (< 2x) | `docs/BENCHMARK.md` |
-| `/orders/by-status` | 9.83 ms | 6.09 ms | 1.13x | Great (< 200 ms) | Great (< 2x) | `docs/BENCHMARK.md` |
+| `/orders/count` | 7.50 ms | 6.32 ms | 0.84x (~1x, within noise (10M faster than 1M is noise/cache, not a speedup)) | Great (< 200 ms) | Great (< 2x) | `docs/BENCHMARK.md` |
+| `/orders/trend` (hour) | 13.58 ms | 10.74 ms | 0.79x (~1x, within noise (10M faster than 1M is noise/cache, not a speedup)) | Great (< 200 ms) | Great (< 2x) | `docs/BENCHMARK.md` |
+| `/orders/by-status` | 9.83 ms | 6.09 ms | 0.62x (~1x, within noise (10M faster than 1M is noise/cache, not a speedup)) | Great (< 200 ms) | Great (< 2x) | `docs/BENCHMARK.md` |
 | `/products/top` (sales) | 15.75 ms | 64.44 ms | 4.09x | Good (< 1 s) | Good (< 5x) | `docs/BENCHMARK.md` |
 | Naive direct top-10 products (10M) | — | not in results file | — | — | — | `docs/BENCHMARK.md`* |
 
+*Note: Raw per-run json not saved; values from the BENCHMARK.md run, one laptop, 1 run set. Old '1.78x/1.24x/1.13x' figures could not be reproduced and were removed.*  
 *\*Note: `docs/BENCHMARK.md` Section 4.1 reports 113.55 ms execution time for direct unindexed heap scan on Tenant 1 rollup; ~1,047 ms raw direct OLTP query was referenced in preliminary test notes but is not in results file.*
 
 ### 3. Worker Cost & Idle Footprint (100 Tenants)
@@ -278,4 +287,17 @@ Later stages are faster than raw writes, so this reflects warm-up/order effects,
 
 ## Dashboard
 
-TODO after merge
+- **UI URL**: Access the interactive dashboard at http://localhost:8000/ui
+- **Environment**:
+  ```powershell
+  $env:DEMO_MODE="1"
+  $env:UI_OPEN_MODE="1"
+  $env:PROFILE="1m"
+  ```
+- **Start Command**:
+  ```powershell
+  py -3.12 -m uvicorn api.main:app --port 8000 --no-access-log
+  ```
+- **Demo Orders**: Demo orders use IDs `900,000,000`–`949,999,999`. The Reset Demo button deletes only that range; real baseline data is untouched.
+- **Authentication**: No login on the dashboard by PRD design (the server-side UI proxy injects authorization headers). The underlying API stays fully authenticated with `X-Tenant-Key` and `X-Admin-Key`. See [Dashboard API Reference](docs/DASHBOARD_API.md).
+- **Time Ranges**: The **Live** range shows only demo orders generated in real time; the **Latest** range ends 30 Oct 2026 (the historical dataset upper bound).

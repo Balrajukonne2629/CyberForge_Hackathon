@@ -1,3 +1,5 @@
+> STALE: second-laptop run was not done. Current suite is 15 tests; see README.
+
 # Teammate Setup Guide (Vignesh)
 
 This guide provides exact copy-paste PowerShell instructions to clone, configure, and run CyberForge on a clean Windows 11 laptop (Lenovo i7-13620H, 16 GB RAM, Docker Desktop, WSL2).
@@ -125,7 +127,7 @@ TEST SUITE SUMMARY (1M):
   10. Rebuild Equality under Load per-tenant   :     PASS (8.06s)
   11. Golden Ground-Truth Parity vs Tenant DBs :     PASS (9.55s)
 ======================================================================
-SUCCESS: All 11 test suites passed with 100% ground-truth parity!
+SUCCESS: All 11 test suites passed with 480/480 golden checks at 1M!
 GOLDEN CHECK RESULTS: 480/480 passed. Total mismatches: 0
 ```
 

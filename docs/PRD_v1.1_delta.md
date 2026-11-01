@@ -41,7 +41,7 @@ The git tag `phase2-single-db` marks the state of the codebase before this migra
 
 ### 2.5 Multi-Source Worker Pipeline
 - **Round-Robin Scheduling**: The worker maintains persistent connections to tenant databases, visiting each tenant round-robin.
-- **Fairness & Starvation Prevention**: Rows read per tenant per visit are capped (`per_tenant_batch = 500`), guaranteeing that a high-volume flood on one tenant cannot starve other tenants.
+- **Fairness & Starvation Prevention**: Rows read per tenant per visit are capped (`per_tenant_batch = 500`), designed so that a high-volume flood on one tenant cannot starve other tenants.
 - **Worker Sharding**: Sharding by environment variables `WORKER_ID` and `WORKER_COUNT`:
   `tenant_id % WORKER_COUNT == WORKER_ID`.
 
