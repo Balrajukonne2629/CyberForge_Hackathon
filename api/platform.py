@@ -14,9 +14,13 @@ import asyncpg
 
 from config import get_config
 from api.demo import router as demo_router
+from api.ui_proxy import router as ui_proxy_router, TimedRoute
 
-router = APIRouter()
+router = APIRouter(route_class=TimedRoute)
 router.include_router(demo_router)
+router.include_router(ui_proxy_router)
+
+from api.main import snap_to_hour, snap_to_day
 
 # Lazy pool reference to avoid circular import issues
 _pool = None
@@ -60,8 +64,8 @@ async def platform_summary(
     x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")
 ):
     _verify_admin(x_admin_key)
-    f_dt = api.main.snap_to_hour(from_time, is_end=False)
-    t_dt = api.main.snap_to_hour(to_time, is_end=True)
+    f_dt = snap_to_hour(from_time, is_end=False)
+    t_dt = snap_to_hour(to_time, is_end=True)
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     as_of = now_utc.isoformat()
 
@@ -71,7 +75,8 @@ async def platform_summary(
         totals_row = await conn.fetchrow("""
             SELECT 
                 COALESCE(SUM(order_count), 0)::bigint AS order_count,
-                COALESCE(SUM(revenue), 0.00)::numeric(14,2) AS total_sales
+                COALESCE(SUM(revenue), 0.00)::numeric(14,2) AS total_sales,
+                COUNT(DISTINCT tenant_id) FILTER (WHERE order_count > 0)::bigint AS active_stores
             FROM rollup_orders_hour
             WHERE hour >= $1 AND hour < $2
         """, f_dt, t_dt)
@@ -116,8 +121,8 @@ async def platform_summary(
         """, f_dt, t_dt)
 
         # 5. Top 10 products across all tenants
-        f_day = api.main.snap_to_day(from_time, is_end=False)
-        t_day = api.main.snap_to_day(to_time, is_end=True)
+        f_day = snap_to_day(from_time, is_end=False)
+        t_day = snap_to_day(to_time, is_end=True)
         top_product_rows = await conn.fetch("""
             SELECT 
                 product_id,
@@ -142,7 +147,8 @@ async def platform_summary(
     return {
         "totals": {
             "order_count": int(totals_row["order_count"]),
-            "total_sales": float(totals_row["total_sales"])
+            "total_sales": float(totals_row["total_sales"]),
+            "active_stores": int(totals_row["active_stores"] or 0)
         },
         "trend": [
             {
@@ -194,8 +200,8 @@ async def platform_tenants(
     x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")
 ):
     _verify_admin(x_admin_key)
-    f_dt = api.main.snap_to_hour(from_time, is_end=False)
-    t_dt = api.main.snap_to_hour(to_time, is_end=True)
+    f_dt = snap_to_hour(from_time, is_end=False)
+    t_dt = snap_to_hour(to_time, is_end=True)
 
     pool = await _get_pool()
     async with pool.acquire() as conn:
@@ -243,23 +249,110 @@ async def admin_monitor(x_admin_key: Optional[str] = Header(None, alias="X-Admin
     profile = os.getenv("PROFILE", "1m")
     cfg = get_config(profile)
     w_cfg = cfg.get("worker", {})
+
     pool = await _get_pool()
     async with pool.acquire() as conn:
-        worker_rows = await conn.fetch("SELECT stalled, lag_seconds FROM worker_state")
+        tenant_rows = await conn.fetch("""
+            SELECT 
+                r.tenant_id,
+                r.database_name,
+                COALESCE(s.lag_seconds, 0.0) AS lag_seconds,
+                COALESCE(s.stalled, false) AS stalled,
+                COALESCE(s.cursor_xid::text, '') AS cursor_xid,
+                COALESCE(q.quarantine_count, 0)::bigint AS quarantine_count
+            FROM tenant_registry r
+            LEFT JOIN worker_state s ON r.tenant_id = s.tenant_id
+            LEFT JOIN (
+                SELECT tenant_id, COUNT(*) AS quarantine_count
+                FROM quarantine
+                GROUP BY tenant_id
+            ) q ON r.tenant_id = q.tenant_id
+            ORDER BY r.tenant_id ASC
+        """)
         quarantine_cnt = await conn.fetchval("SELECT count(*) FROM quarantine")
+        
+        # Real worker telemetry from worker_telemetry table and worker_state
+        telemetry_row = await conn.fetchrow("""
+            SELECT mode, start_time, last_sweep, last_loop_ms, updated_at
+            FROM worker_telemetry
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """)
+        max_state_hb = await conn.fetchval("""
+            SELECT MAX(heartbeat) FROM worker_state
+        """)
 
-    stalled_count = sum(1 for r in worker_rows if r["stalled"])
-    max_lag = max([float(r["lag_seconds"] or 0.0) for r in worker_rows], default=0.0)
+    tenants_list = [
+        {
+            "tenant_id": int(r["tenant_id"]),
+            "database_name": r["database_name"],
+            "lag_seconds": round(float(r["lag_seconds"]), 2),
+            "stalled": bool(r["stalled"]),
+            "cursor_xid": str(r["cursor_xid"]),
+            "quarantine_count": int(r["quarantine_count"])
+        }
+        for r in tenant_rows
+    ]
+
+    stalled_count = sum(1 for t in tenants_list if t["stalled"])
+    all_lags = [t["lag_seconds"] for t in tenants_list] or [0.0]
+    max_lag = max(all_lags, default=0.0)
+    sorted_lags = sorted(all_lags)
+    median_lag = sorted_lags[len(sorted_lags) // 2] if sorted_lags else 0.0
+    worst_tenant = max(tenants_list, key=lambda t: t["lag_seconds"], default={"tenant_id": 1})
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    now_naive = now_utc.replace(tzinfo=None)
+
+    worker_mode = "unknown"
+    uptime_sec = None
+    sweep_age_sec = None
+    loop_time = None
+    heartbeat_age_sec = None
+    worker_running = False
+
+    if telemetry_row:
+        worker_mode = telemetry_row["mode"] or "unknown"
+        if telemetry_row["start_time"]:
+            uptime_sec = round((now_naive - telemetry_row["start_time"]).total_seconds(), 1)
+        if telemetry_row["last_sweep"]:
+            sweep_age_sec = round((now_naive - telemetry_row["last_sweep"]).total_seconds(), 1)
+        if telemetry_row["last_loop_ms"] is not None:
+            loop_time = round(float(telemetry_row["last_loop_ms"]), 2)
+
+    effective_hb = telemetry_row["updated_at"] if (telemetry_row and telemetry_row["updated_at"]) else None
+    if max_state_hb:
+        if effective_hb is None or max_state_hb > effective_hb:
+            effective_hb = max_state_hb
+    if effective_hb:
+        heartbeat_age_sec = round((now_naive - effective_hb).total_seconds(), 1)
+        worker_running = (heartbeat_age_sec <= 15.0)
+
+    changes_waiting = sum(1 for lag in all_lags if lag > 0.0)
 
     return {
-        "worker_mode": w_cfg.get("mode", "event"),
+        "worker_mode": worker_mode,
+        "worker_running": worker_running,
+        "worker_stale": not worker_running,
+        "heartbeat_age_seconds": heartbeat_age_sec,
+        "worker": {
+            "mode": worker_mode,
+            "uptime_seconds": uptime_sec,
+            "safety_sweep_age_seconds": sweep_age_sec,
+            "loop_time_ms": loop_time,
+            "events_per_sec": None
+        },
         "safety_sweep_interval": float(w_cfg.get("safety_sweep_interval", 5.0)),
         "debounce_ms": int(w_cfg.get("debounce_ms", 15)),
-        "loop_time_ms": round(float(w_cfg.get("debounce_ms", 15)) * 1.5, 2),
+        "loop_time_ms": loop_time,
         "stalled_count": stalled_count,
         "max_lag_seconds": round(max_lag, 2),
+        "median_lag_seconds": round(median_lag, 2),
+        "worst_tenant_id": worst_tenant["tenant_id"],
+        "changes_waiting": changes_waiting,
         "quarantine_count": int(quarantine_cnt or 0),
-        "as_of": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        "tenants": tenants_list,
+        "as_of": now_utc.isoformat()
     }
 
 @router.get("/admin/platform/scaling")

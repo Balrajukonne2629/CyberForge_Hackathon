@@ -23,6 +23,12 @@ Complete reference for all API endpoints, authentication headers, request parame
 - **Demo Mode Guard (`DEMO_MODE`)**:
   - All `/demo/*` endpoints require the environment variable `DEMO_MODE=1`.
   - When `DEMO_MODE != "1"`, all `/demo/*` endpoints return `404 Not Found`.
+- **UI Proxy Layer (`UI_OPEN_MODE`)**:
+  - Active when `UI_OPEN_MODE=1` (default `1` for local demo).
+  - Exposes credential-free `/ui-api/*` proxy routes for the single-page dashboard.
+  - Automatically resolves tenant keys and admin keys server-side; credentials never reach the browser client.
+  - Returns `404 Not Found` when `UI_OPEN_MODE=0`.
+  - The underlying `/tenants/*` and `/admin/*` APIs remain strictly authenticated and return `403 Forbidden` without credentials.
 
 ---
 

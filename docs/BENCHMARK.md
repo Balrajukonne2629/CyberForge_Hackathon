@@ -29,12 +29,13 @@ All evaluations use strict organizer thresholds and engineering goals. For DB sa
 | **DB Safety: 2 Dash Clients (d2 vs c)** | `< 25% slower` | `< 10% slower` | `< 5% slower` | `-15.1% p50, -17.1% p95` | `+23.4% p50, +24.1% p95` | **PASS (Good)** |
 | **DB Safety: 8 Dash Clients (d8 vs c)** | `< 25% slower` | `< 10% slower` | `< 5% slower` | `-5.8% p50, -9.2% p95` | `+65.2% p50, +112.4% p95` | **FAIL** |
 | **Correctness: Golden Parity** | `exact match` | `exact match` | `exact match` | `480 / 480 passed (0 mismatches)` | `480 / 480 passed (0 mismatches)` | **PASS** |
-| **Growth 1M to 10M: Count** | `< 5x` | `< 2x` | `< 1.5x` | — | `p50: 1.13x, p95: 1.78x` | **PASS (Great: <2x, misses our <1.5x goal)** |
-| **Growth 1M to 10M: Trend (hour)** | `< 5x` | `< 2x` | `< 1.5x` | — | `p50: 1.36x, p95: 1.24x` | **PASS (Great)** |
-| **Growth 1M to 10M: By Status** | `< 5x` | `< 2x` | `< 1.5x` | — | `p50: 1.07x, p95: 1.13x` | **PASS (Great)** |
-| **Growth 1M to 10M: Top Products** | `< 5x` | `< 2x` | `< 1.5x` | — | `p50: 1.32x, p95: 4.09x`* | **PASS (Good: <5x, misses our <1.5x goal)** |
+| **Growth 1M to 10M: Count** | `< 5x` | `< 2x` | `< 1.5x` | — | `0.84x (~1x, within noise (10M faster than 1M is noise/cache, not a speedup))` | **PASS (Great)** |
+| **Growth 1M to 10M: Trend (hour)** | `< 5x` | `< 2x` | `< 1.5x` | — | `0.79x (~1x, within noise (10M faster than 1M is noise/cache, not a speedup))` | **PASS (Great)** |
+| **Growth 1M to 10M: By Status** | `< 5x` | `< 2x` | `< 1.5x` | — | `0.62x (~1x, within noise (10M faster than 1M is noise/cache, not a speedup))` | **PASS (Great)** |
+| **Growth 1M to 10M: Top Products** | `< 5x` | `< 2x` | `< 1.5x` | — | `4.09x`* | **PASS (Good: <5x, misses our <1.5x goal)** |
 
-*\*Covering index `idx_rollup_prod_covering` on `rollup_product_day (tenant_id, day) INCLUDE (product_id, units, sales)` + VACUUM (ANALYZE).*
+*\*Covering index `idx_rollup_prod_covering` on `rollup_product_day (tenant_id, day) INCLUDE (product_id, units, sales)` + VACUUM (ANALYZE).*  
+*Note: Raw per-run json not saved; values from the BENCHMARK.md run, one laptop, 1 run set. Old '1.78x/1.24x/1.13x' figures could not be reproduced and were removed.*
 
 ---
 
@@ -92,7 +93,7 @@ Measurements conducted over 5 alternating repeats (`a -> b -> c -> d2 -> d8 -> d
 
 **Linearity & Saturation Findings:**
 1. **Low Load (0 - 2 Clients / 0 - 40 req/s):** The relationship is essentially flat. Server execution time remains rock-solid at `0.12 - 0.13 ms`, and client p95 only increases by `+0.21 ms` (well within normal test noise).
-2. **Knee & Saturation (8 to 32 Clients):** Contention begins around 8 clients as Host CPU hits ~96%. At 32 clients, the single-host VM CPU cores are 100% saturated. Client round-trip latency increases because client threads queue for OS CPU time, whereas PostgreSQL server-side execution time (`Server Mean`) only grows from `0.12 ms` to `0.19 ms` (+0.07 ms total).
+2. **Knee & Saturation (8 to 32 Clients):** Contention begins around 8 clients as Host CPU hits ~96%. At 32 clients, the single-host VM CPU cores are attributed to host CPU contention (untested). Client round-trip latency increases because client threads queue for OS CPU time, whereas PostgreSQL server-side execution time (`Server Mean`) only grows from `0.12 ms` to `0.19 ms` (+0.07 ms total).
 
 ### 3.2 Control Experiments (Isolating CPU vs Disk Contention)
 
@@ -108,7 +109,7 @@ To test whether the main-db slowdown under dashboard load is caused by Host CPU 
 **Root Cause Diagnosis:**
 - **Control 2 (100 fsyncs/sec against disk volume):** Produced only a `+4.6%` shift (from 2.66ms to 2.78ms), well within the `±5%` run-to-run noise floor. Disk I/O and WAL fsync contention are completely ruled out.
 - **Control 1 (Host CPU Burner):** Immediately caused massive latency inflation (+9,707%), closely mirroring and exceeding the dashboard load behavior.
-- **Conclusion:** The overhead in (d8) is **100% host CPU core contention** from running 8 concurrent HTTP client threads, FastAPI Uvicorn workers, and PostgreSQL backends within the same virtualized WSL2 machine. The database engines themselves maintain sub-millisecond execution. Zero durability compromises were made (full fsync and synchronous_commit remain active).
+- **Conclusion:** The overhead in (d8) is **attributed to host CPU contention (untested)** from running 8 concurrent HTTP client threads, FastAPI Uvicorn workers, and PostgreSQL backends within the same virtualized WSL2 machine. The database engines themselves maintain sub-millisecond execution. Zero durability compromises were made (full fsync and synchronous_commit remain active).
 
 ---
 

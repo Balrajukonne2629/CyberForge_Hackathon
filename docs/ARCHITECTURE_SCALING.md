@@ -57,7 +57,7 @@ To make processing cost proportional to the number of *active* tenants $O(\text{
 ### 2.2 Safety Invariant (NOTIFY is only a hint)
 - PostgreSQL `NOTIFY` is delivered asynchronously over TCP. A notification can be delayed or dropped if a connection resets or the notification queue overflows.
 - **Safety Rule:** Outbox and cursor in PostgreSQL remain the sole source of truth.
-- **Safety Sweep:** A background safety sweep runs at worker startup, immediately after any socket reconnection, and every **5.0 seconds** during runtime. The sweep marks all owned tenants as dirty, guaranteeing that any missed notification is processed within 5 seconds.
+- **Safety Sweep:** A background safety sweep runs at worker startup, immediately after any socket reconnection, and every **5.0 seconds** during runtime. The sweep marks all owned tenants as dirty, designed so that any missed notification is processed within 5 seconds.
 - **Safe-XID Invariant:** Ingestion strictly enforces `xid < pg_snapshot_xmin(pg_current_snapshot())` to guarantee that concurrent, out-of-order in-flight transactions are never skipped.
 
 ### 2.3 Deficit Round-Robin (DRR) Fairness
